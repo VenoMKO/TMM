@@ -10,3 +10,5 @@ std::wstring A2W(const std::string& str);
 
 // Creates an upper-case copy of the provided string
 std::string ToUpper(const std::string& data);
+
+bool IsAnsi(const std::string& str);

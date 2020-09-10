@@ -7,7 +7,8 @@ bool IsValidDir(const wxString& path)
 	return path.EndsWith(wxFILE_SEP_PATH + RootDir) || path.EndsWith(wxFILE_SEP_PATH + RootDir + wxFILE_SEP_PATH);
 }
 
-RootDirWindow::RootDirWindow(wxWindow* parent, const wxString& rootDir, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : wxDialog(parent, id, title, pos, size, style)
+RootDirWindow::RootDirWindow(wxWindow* parent, const wxString& rootDir, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style)
+	: wxDialog(parent, id, title, pos, size, style)
 {
 	SetSizeHints(wxDefaultSize, wxDefaultSize);
 

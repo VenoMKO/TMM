@@ -46,3 +46,15 @@ std::string ToUpper(const std::string& data)
   });
   return result;
 }
+
+bool IsAnsi(const std::string& str)
+{
+  for (const unsigned char& ch : str)
+  {
+    if (ch > 127)
+    {
+      return false;
+    }
+  }
+  return true;
+}

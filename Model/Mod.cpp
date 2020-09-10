@@ -35,6 +35,23 @@ std::string GetString(std::ifstream& s)
   return result;
 }
 
+void SetString(std::ofstream& s, std::string str)
+{
+  int size = str.size();
+  if (!IsAnsi(str))
+  {
+    std::wstring wstr = A2W(str);
+    size = -(int)wstr.size();
+    s.write((char*)&size, sizeof(size));
+    s.write((char*)wstr.c_str(), size * -2);
+  }
+  else
+  {
+    s.write((char*)&size, sizeof(size));
+    s.write((char*)str.c_str(), size * -2);
+  }
+}
+
 std::ifstream& operator>>(std::ifstream& s, Mod& m)
 {
   s.seekg(0, std::ios::end);
@@ -108,9 +125,43 @@ std::ifstream& operator>>(std::ifstream& s, Mod& m)
   return s;
 }
 
+std::ifstream& operator>>(std::ifstream& s, GameConfigFile& cfg)
+{
+  s.seekg(0);
+  int count = 0;
+  s.read((char*)&count, sizeof(count));
+  cfg.Mods.resize(count);
+  for (int idx = 0; idx < count; ++idx)
+  {
+    int enabled = 0;
+    s.read((char*)&enabled, sizeof(enabled));
+    cfg.Mods[idx].Enabled = enabled;
+    cfg.Mods[idx].File = GetString(s);
+    cfg.Mods[idx].IncompleteObjectPath = GetString(s);
+  }
+  return s;
+}
+
+std::ofstream& operator<<(std::ofstream& s, GameConfigFile& cfg)
+{
+  int count = (int)cfg.Mods.size();
+  s.write((char*)&count, sizeof(count));
+  for (int idx = 0; idx < count; ++idx)
+  {
+    int enabled = cfg.Mods[idx].Enabled;
+    s.write((char*)&enabled, sizeof(enabled));
+    SetString(s, cfg.Mods[idx].File);
+    SetString(s, cfg.Mods[idx].IncompleteObjectPath);
+  }
+  return s;
+}
+
 std::ifstream& operator>>(std::ifstream& s, Mod::CompositePackage& p)
 {
   p.Offset = s.tellg();
+  s.seekg(p.Offset + 4);
+  s.read((char*)&p.FileVersion, sizeof(p.FileVersion));
+  s.read((char*)&p.LicenseeVersion, sizeof(p.LicenseeVersion));
   s.seekg(p.Offset + 12);
   std::string folderName = GetString(s);
   if (folderName.find(ModPrefix) == 0)

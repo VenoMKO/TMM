@@ -5,6 +5,8 @@
 
 #include <fstream>
 
+const char* MoreModsLink = "https://www.tumblr.com/tagged/tera+mods";
+
 enum ControlElementId
 {
 	Add = 1000,
@@ -90,7 +92,7 @@ ModWindow::ModWindow(wxWindow* parent, wxWindowID id, const wxString& title, con
 	m_panel2 = new wxPanel(m_panel1, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
 	bSizer3->Add(m_panel2, 1, wxEXPAND | wxALL, 5);
 
-	GitHubLink = new wxHyperlinkCtrl(m_panel1, ControlElementId::GitHub, _("Tera Mod Manager v.1.00"), wxT("https://github.com/VenoMKO/TMM/Releases"), wxDefaultPosition, wxDefaultSize, wxHL_DEFAULT_STYLE);
+	GitHubLink = new wxHyperlinkCtrl(m_panel1, ControlElementId::GitHub, _("Tera Mod Manager v.1.00"), wxT("https://github.com/VenoMKO/TMM/releases"), wxDefaultPosition, wxDefaultSize, wxHL_DEFAULT_STYLE);
 	bSizer3->Add(GitHubLink, 0, wxALL | wxEXPAND, 5);
 
 
@@ -154,4 +156,5 @@ void ModWindow::OnResetClicked(wxCommandEvent& event)
 
 void ModWindow::OnMoreModsClicked(wxCommandEvent& event)
 {
+	wxLaunchDefaultBrowser(MoreModsLink);
 }

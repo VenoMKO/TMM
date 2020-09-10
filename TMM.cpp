@@ -5,15 +5,60 @@
 #include "UI/ModWindow.h"
 #include "UI/RootDirWindow.h"
 
+#include <wx/stdpaths.h>
+#include <wx/fileconf.h>
+
 wxIMPLEMENT_APP(TMM);
 
-void TMM::LoadConfig()
+wxString GetConfigPath()
 {
+  wxString path = wxStandardPaths::Get().GetUserLocalDataDir() + wxFILE_SEP_PATH;
+  if (!wxDirExists(path))
+  {
+    wxMkDir(path);
+  }
+  path += wxS("Settings.ini");
+  return path;
+}
+
+void TMM::LoadAppConfig()
+{
+  wxString path = GetConfigPath();
+  wxFileConfig cfg(wxEmptyString, wxEmptyString, path);
+  cfg.SetPath(path);
+
+  RootDir = cfg.Read(wxT("RootDir"), wxT("")).ToStdWstring();
+}
+
+void TMM::SaveAppConfig()
+{
+  wxString path = GetConfigPath();
+  wxFileConfig cfg(wxEmptyString, wxEmptyString, path);
+  cfg.SetPath(path);
+
+  wxString tmpPath = RootDir.wstring();
+  cfg.Write(wxT("RootDir"), tmpPath);
+}
+
+void TMM::LoadGameConfig()
+{
+  if (!std::filesystem::exists(GameConfigPath))
+  {
+    SaveGameConfig();
+  }
+  std::ifstream s(GameConfigPath, std::ios::binary | std::ios::in);
+  s >> GameConfig;
+}
+
+void TMM::SaveGameConfig()
+{
+  std::ofstream s(GameConfigPath, std::ios::binary | std::ios::out);
+  s << GameConfig;
 }
 
 int TMM::OnRun()
 {
-  LoadConfig();
+  LoadAppConfig();
 
   if (RootDir.empty() || !std::filesystem::exists(RootDir))
   {
@@ -46,18 +91,22 @@ int TMM::OnRun()
   }
 
   ModsDir = RootDir / L"_CookedPC";
-  BackupCompositeMapperPath = ModsDir / L"CompositePackageMapper.dat";
+  BackupCompositeMapperPath = ModsDir / L"CompositePackageMapper.backup";
+  GameConfigPath = ModsDir / L"Config.tmm";
 
   if (!std::filesystem::exists(ModsDir))
   {
     std::filesystem::create_directory(ModsDir);
     std::filesystem::copy_file(CompositeMapperPath, BackupCompositeMapperPath);
   }
-  else if (!std::filesystem::exists(ModsDir))
+
+  if (!std::filesystem::exists(BackupCompositeMapperPath))
   {
     std::filesystem::copy_file(CompositeMapperPath, BackupCompositeMapperPath);
   }
 
+  SaveAppConfig();
+  LoadGameConfig();
   ModWindow* mainWindow = new ModWindow(nullptr);
   mainWindow->Show();
   return wxApp::OnRun();
