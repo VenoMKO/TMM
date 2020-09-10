@@ -1,6 +1,9 @@
 #include "ModWindow.h"
+#include "../Model/Mod.h"
 
 #include <wx/statline.h>
+
+#include <fstream>
 
 enum ControlElementId
 {
@@ -117,6 +120,16 @@ ModWindow::ModWindow(wxWindow* parent, wxWindowID id, const wxString& title, con
 
 void ModWindow::OnAddClicked(wxCommandEvent& event)
 {
+	const wxString extensions = wxS("Package files (*.gpk; *.gmp; *.u; *.umap; *.upk)|*.gpk;*.gmp;*.u;*.umap;*.upk");
+	wxString path = wxFileSelector("Open a package", wxEmptyString, wxEmptyString, extensions, extensions, wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+	if (path.empty())
+	{
+		return;
+	}
+
+	std::ifstream s(path.ToStdWstring(), std::ios::binary | std::ios::in);
+	Mod mod;
+	s >> mod;
 }
 
 void ModWindow::OnRemoveClicked(wxCommandEvent& event)
