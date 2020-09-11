@@ -147,6 +147,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Model\ModUIModel.h" />
     <ClInclude Include="TMM.h" />
     <ClInclude Include="Model\CompositeMapper.h" />
     <ClInclude Include="Model\Mod.h" />
@@ -156,6 +157,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Model\Mod.cpp" />
+    <ClCompile Include="Model\ModUIModel.cpp" />
     <ClCompile Include="TMM.cpp" />
     <ClCompile Include="Model\CompositeMapper.cpp" />
     <ClCompile Include="UI\ModWindow.cpp" />

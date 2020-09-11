@@ -48,11 +48,11 @@ void SetString(std::ofstream& s, std::string str)
   else
   {
     s.write((char*)&size, sizeof(size));
-    s.write((char*)str.c_str(), size * -2);
+    s.write((char*)str.c_str(), size);
   }
 }
 
-std::ifstream& operator>>(std::ifstream& s, Mod& m)
+std::ifstream& operator>>(std::ifstream& s, ModFile& m)
 {
   s.seekg(0, std::ios::end);
   const size_t end = s.tellg();
@@ -117,7 +117,7 @@ std::ifstream& operator>>(std::ifstream& s, Mod& m)
   else
   {
     // Package has no metadata, but it might have incomplete object path which should be enough for patching
-    Mod::CompositePackage& p = m.Packages.emplace_back();
+    ModFile::CompositePackage& p = m.Packages.emplace_back();
     p.Size = (int)end;
     s.seekg(0);
     s >> p;
@@ -137,7 +137,6 @@ std::ifstream& operator>>(std::ifstream& s, GameConfigFile& cfg)
     s.read((char*)&enabled, sizeof(enabled));
     cfg.Mods[idx].Enabled = enabled;
     cfg.Mods[idx].File = GetString(s);
-    cfg.Mods[idx].IncompleteObjectPath = GetString(s);
   }
   return s;
 }
@@ -151,12 +150,11 @@ std::ofstream& operator<<(std::ofstream& s, GameConfigFile& cfg)
     int enabled = cfg.Mods[idx].Enabled;
     s.write((char*)&enabled, sizeof(enabled));
     SetString(s, cfg.Mods[idx].File);
-    SetString(s, cfg.Mods[idx].IncompleteObjectPath);
   }
   return s;
 }
 
-std::ifstream& operator>>(std::ifstream& s, Mod::CompositePackage& p)
+std::ifstream& operator>>(std::ifstream& s, ModFile::CompositePackage& p)
 {
   p.Offset = s.tellg();
   s.seekg(p.Offset + 4);

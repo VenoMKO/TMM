@@ -46,7 +46,7 @@ RootDirWindow::RootDirWindow(wxWindow* parent, const wxString& rootDir, wxWindow
 
 	OkButton = new wxButton(this, wxID_OK, _("Apply"), wxDefaultPosition, wxDefaultSize, 0);
 	bSizer10->Add(OkButton, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
-	OkButton->Enable(false);
+	OkButton->Enable(IsValidDir(rootDir));
 
 	wxButton* CancelButton;
 	CancelButton = new wxButton(this, wxID_CANCEL, _("Cancel"), wxDefaultPosition, wxDefaultSize, 0);

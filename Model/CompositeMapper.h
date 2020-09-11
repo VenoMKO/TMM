@@ -13,6 +13,9 @@ struct CompositeEntry {
 
 class CompositeMapperFile {
 public:
+  CompositeMapperFile()
+  {}
+
   CompositeMapperFile(const std::wstring& source);
 
   void Save();

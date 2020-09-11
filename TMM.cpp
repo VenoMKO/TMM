@@ -9,6 +9,19 @@
 #include <wx/fileconf.h>
 
 wxIMPLEMENT_APP(TMM);
+  
+
+const char* ConfigFile = "Settings.ini";
+const char* ConfigFileRootKey = "RootDir";
+
+const char* GameConfigFile = "ModList.tmm";
+
+const char* CompositeMapperFile = "CompositePackageMapper.dat";
+const char* CompositeMapperBackupFile = "CompositePackageMapper.backup";
+
+const char* CookedPcDir = "CookedPC";
+const char* ModsStorageDir = "_CookedPC";
+
 
 wxString GetConfigPath()
 {
@@ -17,7 +30,7 @@ wxString GetConfigPath()
   {
     wxMkDir(path);
   }
-  path += wxS("Settings.ini");
+  path += ConfigFile;
   return path;
 }
 
@@ -27,7 +40,7 @@ void TMM::LoadAppConfig()
   wxFileConfig cfg(wxEmptyString, wxEmptyString, path);
   cfg.SetPath(path);
 
-  RootDir = cfg.Read(wxT("RootDir"), wxT("")).ToStdWstring();
+  RootDir = cfg.Read(ConfigFileRootKey, wxEmptyString).ToStdWstring();
 }
 
 void TMM::SaveAppConfig()
@@ -37,7 +50,7 @@ void TMM::SaveAppConfig()
   cfg.SetPath(path);
 
   wxString tmpPath = RootDir.wstring();
-  cfg.Write(wxT("RootDir"), tmpPath);
+  cfg.Write(ConfigFileRootKey, tmpPath);
 }
 
 void TMM::LoadGameConfig()
@@ -56,10 +69,67 @@ void TMM::SaveGameConfig()
   s << GameConfig;
 }
 
+void TMM::ChangeRootDir(const std::filesystem::path& newRootDir)
+{
+  RootDir = newRootDir;
+  if (!SetupPaths())
+  {
+    ExitMainLoop();
+    return;
+  }
+  SaveAppConfig();
+  LoadGameConfig();
+  ModWindow* mainWindow = new ModWindow(nullptr, GameConfig.Mods);
+  mainWindow->Show();
+}
+
+void TMM::UpdateModsList(const std::vector<ModEntry> modData)
+{
+  GameConfig.Mods = modData;
+  SaveGameConfig();
+}
+
+bool TMM::BackupCompositeMapperFile()
+{
+  if (!std::filesystem::exists(CompositeMapperPath))
+  {
+    return false;
+  }
+  std::error_code err;
+  if (!std::filesystem::exists(BackupCompositeMapperPath))
+  {
+    return std::filesystem::copy_file(CompositeMapperPath, BackupCompositeMapperPath, err);
+  }
+  else
+  {
+    if (!std::filesystem::remove(BackupCompositeMapperPath, err))
+    {
+      return false;
+    }
+    return std::filesystem::copy_file(CompositeMapperPath, BackupCompositeMapperPath, err);
+  }
+  return true;
+}
+
 int TMM::OnRun()
 {
   LoadAppConfig();
 
+  if (!SetupPaths())
+  {
+    return 0;
+  }
+
+  SaveAppConfig();
+
+  LoadGameConfig();
+  ModWindow* mainWindow = new ModWindow(nullptr, GameConfig.Mods);
+  mainWindow->Show();
+  return wxApp::OnRun();
+}
+
+bool TMM::SetupPaths()
+{
   if (RootDir.empty() || !std::filesystem::exists(RootDir))
   {
     RootDirWindow rooWin(nullptr, RootDir.wstring());
@@ -69,30 +139,31 @@ int TMM::OnRun()
     }
     if (RootDir.empty() || !std::filesystem::exists(RootDir))
     {
-      return 0;
+      return false;
     }
   }
 
-  CompositeMapperPath = RootDir / L"CookedPC" / L"CompositePackageMapper.dat";
+  CompositeMapperPath = RootDir / CookedPcDir / CompositeMapperFile;
 
   while (!std::filesystem::exists(CompositeMapperPath))
   {
-    wxMessageBox(wxS("CompositePackageMapper.dat file was not found in the game folder. Select a new S1Game folder."), wxS("Error!"), wxICON_ERROR);
+    wxMessageBox(_("Couldn't find \"S1Game\\CookedPC\\CompositePackageMapper.dat\" file."), _("Error!"), wxICON_ERROR);
     RootDirWindow rooWin(nullptr, RootDir.wstring());
-    if (rooWin.ShowModal() == wxID_OK)
+    if (rooWin.ShowModal() != wxID_OK)
     {
-      RootDir = rooWin.GetPath().ToStdWstring();
-      CompositeMapperPath = RootDir / L"CookedPC" / L"CompositePackageMapper.dat";
+      return false;
     }
+    RootDir = rooWin.GetPath().ToStdWstring();
     if (RootDir.empty() || !std::filesystem::exists(RootDir))
     {
-      return 0;
+      return false;
     }
+    CompositeMapperPath = RootDir / CookedPcDir / CompositeMapperFile;
   }
 
-  ModsDir = RootDir / L"_CookedPC";
-  BackupCompositeMapperPath = ModsDir / L"CompositePackageMapper.backup";
-  GameConfigPath = ModsDir / L"Config.tmm";
+  ModsDir = RootDir / ModsStorageDir;
+  BackupCompositeMapperPath = ModsDir / CompositeMapperBackupFile;
+  GameConfigPath = ModsDir / GameConfigFile;
 
   if (!std::filesystem::exists(ModsDir))
   {
@@ -104,10 +175,5 @@ int TMM::OnRun()
   {
     std::filesystem::copy_file(CompositeMapperPath, BackupCompositeMapperPath);
   }
-
-  SaveAppConfig();
-  LoadGameConfig();
-  ModWindow* mainWindow = new ModWindow(nullptr);
-  mainWindow->Show();
-  return wxApp::OnRun();
+  return true;
 }

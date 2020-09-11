@@ -14,8 +14,40 @@ public:
   void LoadGameConfig();
   void SaveGameConfig();
 
+  void ChangeRootDir(const std::filesystem::path& newRootDir);
+  void UpdateModsList(const std::vector<ModEntry> modData);
+
+  bool BackupCompositeMapperFile();
+
+  inline std::filesystem::path GetRootDir() const
+  {
+    return RootDir;
+  }
+
+  inline std::filesystem::path GetModsDir() const
+  {
+    return ModsDir;
+  }
+
+  inline std::filesystem::path GetCompositeMapperPath() const
+  {
+    return CompositeMapperPath;
+  }
+
+  inline std::filesystem::path GetBackupCompositeMapperPath() const
+  {
+    return BackupCompositeMapperPath;
+  }
+
+  inline std::filesystem::path GetGameConfigPath() const
+  {
+    return GameConfigPath;
+  }
+
 protected:
   int OnRun() override;
+
+  bool SetupPaths();
 
 private:
   std::filesystem::path RootDir; // S1Game
@@ -26,3 +58,8 @@ private:
 
   GameConfigFile GameConfig;
 };
+
+inline TMM* GetApp()
+{
+  return (TMM*)wxTheApp;
+}

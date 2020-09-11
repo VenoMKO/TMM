@@ -1,6 +1,9 @@
 #pragma once
 #include <string>
 
+#define VER_TERA_CLASSIC 610
+#define VER_TERA_MODERN 897
+
 // Wide string to UTF8
 std::string W2A(const wchar_t* str, int len = -1);
 std::string W2A(const std::wstring& str);

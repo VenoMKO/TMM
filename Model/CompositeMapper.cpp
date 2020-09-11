@@ -136,7 +136,7 @@ bool CompositeMapperFile::GetEntryByIncompleteObjectPath(const std::string& inco
     {
       continue;
     }
-    std::string testPath = ToUpper(tmpPath.substr(pos));
+    std::string testPath = ToUpper(tmpPath.substr(pos + 1));
     if (testPath == incompletePathUpper)
     {
       output = pair.second;

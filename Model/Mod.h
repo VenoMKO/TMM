@@ -3,20 +3,7 @@
 #include <fstream>
 #include <vector>
 
-struct ModInfo {
-  std::string File;
-  std::string IncompleteObjectPath;
-  bool Enabled = false;
-};
-
-struct GameConfigFile {
-  friend std::ifstream& operator>>(std::ifstream& s, GameConfigFile& cfg);
-  friend std::ofstream& operator<<(std::ofstream& s, GameConfigFile& cfg);
-
-  std::vector<ModInfo> Mods;
-};
-
-struct Mod {
+struct ModFile {
   struct CompositePackage {
     friend std::ifstream& operator>>(std::ifstream& s, CompositePackage& p);
 
@@ -27,7 +14,7 @@ struct Mod {
     unsigned short LicenseeVersion = 0;
   };
 
-  friend std::ifstream& operator>>(std::ifstream& s, Mod& m);
+  friend std::ifstream& operator>>(std::ifstream& s, ModFile& m);
 
   std::string ModName;
   std::string Container;
@@ -35,3 +22,15 @@ struct Mod {
   std::vector<CompositePackage> Packages;
 };
 
+struct ModEntry {
+  std::string File;
+  bool Enabled = false;
+  ModFile Mod;
+};
+
+struct GameConfigFile {
+  friend std::ifstream& operator>>(std::ifstream& s, GameConfigFile& cfg);
+  friend std::ofstream& operator<<(std::ofstream& s, GameConfigFile& cfg);
+
+  std::vector<ModEntry> Mods;
+};

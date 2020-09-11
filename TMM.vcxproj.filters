@@ -33,6 +33,9 @@
     <ClInclude Include="Model\CompositeMapper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Model\ModUIModel.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="TMM.cpp">
@@ -51,6 +54,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Model\Mod.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Model\ModUIModel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
