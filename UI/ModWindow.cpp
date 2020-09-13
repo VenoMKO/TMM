@@ -22,6 +22,8 @@ enum ControlElementId
 	GitHub
 };
 
+wxDEFINE_EVENT(RELOAD_MOD_LIST, wxCommandEvent);
+
 ModWindow::ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style)
 	: wxFrame(parent, id, title, pos, size, style)
 	, ModData(entries)
@@ -124,6 +126,11 @@ ModWindow::ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxW
 	Layout();
 
 	Centre(wxBOTH);
+
+	ModListView->AppendToggleColumn(_("On/Off"), ModUIModel::Col_Check, wxDATAVIEW_CELL_ACTIVATABLE, 55);
+	ModListView->AppendTextColumn(_("Name"), ModUIModel::Col_Name, wxDATAVIEW_CELL_INERT, 200, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
+	ModListView->AppendTextColumn(_("Author"), ModUIModel::Col_Author, wxDATAVIEW_CELL_INERT, 100, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
+	ModListView->AppendTextColumn(_("File"), ModUIModel::Col_File, wxDATAVIEW_CELL_INERT, 100, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
 
 	// Connect Events
 	ModListView->Connect(wxEVT_COMMAND_DATAVIEW_ITEM_VALUE_CHANGED, wxDataViewEventHandler(ModWindow::OnToggleMod), NULL, this);
@@ -272,6 +279,7 @@ void ModWindow::OnAddClicked(wxCommandEvent& event)
 	newMod.Mod = mod;
 	ModData.push_back(newMod);
 	GetApp()->UpdateModsList(ModData);
+	wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
 }
 
 void ModWindow::OnRemoveClicked(wxCommandEvent& event)
@@ -346,12 +354,7 @@ void ModWindow::OnIdle(wxIdleEvent& event)
 		Close();
 	}
 
-	ModListView->AssociateModel(new ModUIModel(ModData));
-
-	ModListView->AppendToggleColumn("On/Off", ModUIModel::Col_Check, wxDATAVIEW_CELL_ACTIVATABLE, 55);
-	ModListView->AppendTextColumn("Name", ModUIModel::Col_Name, wxDATAVIEW_CELL_INERT, 200, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
-	ModListView->AppendTextColumn("Author", ModUIModel::Col_Author, wxDATAVIEW_CELL_INERT, 100, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
-	ModListView->AppendTextColumn("File", ModUIModel::Col_File, wxDATAVIEW_CELL_INERT, 100, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
+	wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
 }
 
 void ModWindow::OnToggleMod(wxDataViewEvent& event)
@@ -363,9 +366,51 @@ void ModWindow::OnToggleMod(wxDataViewEvent& event)
 		if (ModData[row.Index].Enabled != row.Enabled)
 		{
 			ModData[row.Index].Enabled = row.Enabled;
+
+			bool ok = false;
+			if (row.Enabled)
+			{
+				ok = TurnOnMod(ModData[row.Index].Mod);
+			}
+			else
+			{
+				ok = TurnOffMod(ModData[row.Index].Mod);
+			}
+
+			if (ok)
+			{
+				try
+				{
+					CompositeMap.Save();
+				}
+				catch (...)
+				{
+					wxMessageBox(_("Failed to save the CompositePackageMapper.dat!"), _("Error!"), wxICON_ERROR);
+					CompositeMap = CompositeMapperFile(GetApp()->GetCompositeMapperPath());
+					ModData[row.Index].Enabled != ModData[row.Index].Enabled;
+					wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
+					return;
+				}
+				GetApp()->UpdateModsList(ModData);
+			}
+			else
+			{
+				CompositeMap = CompositeMapperFile(GetApp()->GetCompositeMapperPath());
+				ModData[row.Index].Enabled != ModData[row.Index].Enabled;
+				wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
+			}
 			break;
 		}
 	}
+}
+
+void ModWindow::OnRealoadModList(wxCommandEvent&)
+{
+	ModListView->AssociateModel(new ModUIModel(ModData));
+}
+
+void ModWindow::LoadModList()
+{
 }
 
 void ModWindow::InstallMod(const ModFile& mod)
@@ -398,5 +443,24 @@ bool ModWindow::TurnOnMod(const ModFile& mod)
 
 bool ModWindow::TurnOffMod(const ModFile& mod)
 {
-	return false;
+	std::vector<CompositeEntry> backup;
+	for (const auto& package : mod.Packages)
+	{
+		CompositeEntry entry;
+		if (!BackupMap.GetEntryByIncompleteObjectPath(package.IncompleteObjectPath, entry))
+		{
+			wxMessageBox(wxString::Format(_("Failed to find original entry: %s. Try to restore the CompositePackageMapper.dat file."), package.IncompleteObjectPath.c_str()), _("Error!"), wxICON_ERROR);
+			return false;
+		}
+		backup.push_back(entry);
+	}
+	for (const CompositeEntry& entry : backup)
+	{
+		CompositeMap.AddEntry(entry);
+	}
+	return true;
 }
+
+wxBEGIN_EVENT_TABLE(ModWindow, wxFrame)
+EVT_COMMAND(wxID_ANY, RELOAD_MOD_LIST, ModWindow::OnRealoadModList)
+wxEND_EVENT_TABLE()

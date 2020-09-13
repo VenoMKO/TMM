@@ -7,6 +7,8 @@
 #include "../Model/Mod.h"
 #include "../Model/CompositeMapper.h"
 
+wxDECLARE_EVENT(RELOAD_MOD_LIST, wxCommandEvent);
+
 class ModWindow : public wxFrame
 {
 public:
@@ -22,6 +24,7 @@ protected:
 	void OnMoreModsClicked(wxCommandEvent& event);
 	void OnIdle(wxIdleEvent& event);
 	void OnToggleMod(wxDataViewEvent& event);
+	void OnRealoadModList(wxCommandEvent&);
 
 	void LoadModList();
 	void InstallMod(const ModFile& mod);
@@ -44,4 +47,6 @@ private:
 	std::vector<ModEntry> ModData;
 	CompositeMapperFile CompositeMap;
 	CompositeMapperFile BackupMap;
+
+	wxDECLARE_EVENT_TABLE();
 };

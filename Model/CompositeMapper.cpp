@@ -216,6 +216,10 @@ void CompositeMapperFile::SerializeCompositeMapToString(std::string& output)
   
   for (const auto& pair : reverseMap)
   {
+    if (pair.second.empty())
+    {
+      continue;
+    }
     output += pair.first + '?';
     for (const auto& item : pair.second)
     {

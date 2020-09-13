@@ -112,7 +112,7 @@ std::ifstream& operator>>(std::ifstream& s, ModFile& m)
       }
       s >> m.Packages[idx];
     }
-    m.Packages.back().Size = end - m.Packages.back().Offset;
+    m.Packages.back().Size = authorOffset - m.Packages.back().Offset;
   }
   else
   {

@@ -14,13 +14,13 @@ wxIMPLEMENT_APP(TMM);
 const char* ConfigFile = "Settings.ini";
 const char* ConfigFileRootKey = "RootDir";
 
-const char* GameConfigFile = "ModList.tmm";
+const char* GameConfigFilePath = "ModList.tmm";
 
 const char* CompositeMapperFile = "CompositePackageMapper.dat";
 const char* CompositeMapperBackupFile = "CompositePackageMapper.backup";
 
 const char* CookedPcDir = "CookedPC";
-const char* ModsStorageDir = "_CookedPC";
+const char* ModsStorageDir = "CookedPC";
 
 
 wxString GetConfigPath()
@@ -78,6 +78,7 @@ void TMM::ChangeRootDir(const std::filesystem::path& newRootDir)
     return;
   }
   SaveAppConfig();
+  GameConfig.Mods.clear();
   LoadGameConfig();
   ModWindow* mainWindow = new ModWindow(nullptr, GameConfig.Mods);
   mainWindow->Show();
@@ -163,7 +164,7 @@ bool TMM::SetupPaths()
 
   ModsDir = RootDir / ModsStorageDir;
   BackupCompositeMapperPath = ModsDir / CompositeMapperBackupFile;
-  GameConfigPath = ModsDir / GameConfigFile;
+  GameConfigPath = ModsDir / GameConfigFilePath;
 
   if (!std::filesystem::exists(ModsDir))
   {
