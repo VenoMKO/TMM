@@ -95,16 +95,21 @@ void DecryptMapper(const std::wstring& path, std::string& decrypted)
 CompositeMapperFile::CompositeMapperFile(const std::wstring& source)
   : SourcePath(source)
 {
+  Reload();
+}
+
+void CompositeMapperFile::Reload()
+{
   std::string decrypted;
   try
   {
-    DecryptMapper(source, decrypted);
+    DecryptMapper(SourcePath, decrypted);
     SerializeCompositeMapFromString(decrypted);
     SourceSize = decrypted.size();
   }
   catch (const std::exception& e)
   {
-    throw L"Failed to serialize " + source + L". Error: " + A2W(e.what());
+    throw L"Failed to serialize " + SourcePath + L". Error: " + A2W(e.what());
   }
 }
 

@@ -18,6 +18,8 @@ public:
 
   CompositeMapperFile(const std::wstring& source);
 
+  void Reload();
+
   void Save();
   
   // Get an entry by a composite package name. Returns true if found.

@@ -1,6 +1,5 @@
 #include "ModWindow.h"
 #include "RootDirWindow.h"
-#include "../Model/ModUIModel.h"
 #include "../Utils.h"
 #include "../TMM.h"
 
@@ -26,7 +25,7 @@ wxDEFINE_EVENT(RELOAD_MOD_LIST, wxCommandEvent);
 
 ModWindow::ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style)
 	: wxFrame(parent, id, title, pos, size, style)
-	, ModData(entries)
+	, ModList(entries)
 {
 	SetSizeHints(wxDefaultSize, wxDefaultSize);
 	SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_MENU));
@@ -133,7 +132,6 @@ ModWindow::ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxW
 	ModListView->AppendTextColumn(_("File"), ModUIModel::Col_File, wxDATAVIEW_CELL_INERT, 100, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
 
 	// Connect Events
-	ModListView->Connect(wxEVT_COMMAND_DATAVIEW_ITEM_VALUE_CHANGED, wxDataViewEventHandler(ModWindow::OnToggleMod), NULL, this);
 	AddButton->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ModWindow::OnAddClicked), NULL, this);
 	RemoveButton->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ModWindow::OnRemoveClicked), NULL, this);
 	AllOnButton->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ModWindow::OnTurnOnAllClicked), NULL, this);
@@ -143,6 +141,42 @@ ModWindow::ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxW
 	MoreModsButton->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ModWindow::OnMoreModsClicked), NULL, this);
 	Connect(wxEVT_IDLE, wxIdleEventHandler(ModWindow::OnIdle), NULL, this);
 	ProgressBar->Show(false);
+}
+
+bool ModWindow::OnModStateChange(ModEntry& mod)
+{
+	bool ok = false;
+	if (mod.Enabled)
+	{
+		ok = TurnOnMod(mod.Mod);
+	}
+	else
+	{
+		ok = TurnOffMod(mod.Mod);
+	}
+
+	if (ok)
+	{
+		try
+		{
+			CompositeMap.Save();
+		}
+		catch (...)
+		{
+			wxMessageBox(_("Failed to save the CompositePackageMapper.dat!"), _("Error!"), wxICON_ERROR);
+			CompositeMap.Reload();
+			mod.Enabled != mod.Enabled;
+			return false;
+		}
+		GetApp()->UpdateModsList(ModList);
+	}
+	else
+	{
+		CompositeMap.Reload();
+		mod.Enabled != mod.Enabled;
+		return false;
+	}
+	return true;
 }
 
 void ModWindow::OnAddClicked(wxCommandEvent& event)
@@ -198,28 +232,17 @@ void ModWindow::OnAddClicked(wxCommandEvent& event)
 
 	// Search for conflicts
 	int entryToDelete = -1;
-	for (int idx = 0; idx < ModData.size(); ++idx)
+	for (int idx = 0; idx < ModList.size(); ++idx)
 	{
-		const ModEntry& entry = ModData[idx];
+		const ModEntry& entry = ModList[idx];
 		if (entry.Mod.ModName == mod.ModName && entry.Mod.ModAuthor == mod.ModAuthor)
 		{
+			entryToDelete = idx;
 			if (wxMessageBox(_("You already have this mod installed. Do you want to update it?"), _("Error!"), wxICON_QUESTION | wxYES_NO) != wxYES)
 			{
 				return;
 			}
 			break;
-		}
-
-		// Check if any of the imported composite GPKs already used
-		for (const ModFile::CompositePackage& existingPackage : entry.Mod.Packages)
-		{
-			const std::string& incompletePath = existingPackage.IncompleteObjectPath;
-			if (std::any_of(mod.Packages.begin(), mod.Packages.end(), [&incompletePath](const ModFile::CompositePackage& p) { return incompletePath == p.IncompleteObjectPath; }))
-			{
-				wxMessageBox(wxString::Format(_("Can't add this mod because it's conflicting with the %s mod at %s"), entry.Mod.ModName.c_str(), incompletePath.c_str()),
-					_("File already exists!"), wxICON_ERROR);
-				return;
-			}
 		}
 
 		// Check if the mod GPK file already exists under another mod
@@ -262,36 +285,110 @@ void ModWindow::OnAddClicked(wxCommandEvent& event)
 		}
 	}
 
-	if (!TurnOnMod(mod))
-	{
-		return;
-	}
-	CompositeMap.Save();
-
 	if (entryToDelete >= 0)
 	{
-		ModData.erase(ModData.begin() + entryToDelete);
+		ModList.erase(ModList.begin() + entryToDelete);
 	}
 
 	ModEntry newMod;
-	newMod.Enabled = true;
+	if (TurnOnMod(mod))
+	{
+		newMod.Enabled = true;
+		CompositeMap.Save();
+	}
+	
 	newMod.File = mod.Container;
 	newMod.Mod = mod;
-	ModData.push_back(newMod);
-	GetApp()->UpdateModsList(ModData);
+	ModList.push_back(newMod);
+	GetApp()->UpdateModsList(ModList);
 	wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
 }
 
 void ModWindow::OnRemoveClicked(wxCommandEvent& event)
 {
+	int index = int(ModListView->GetCurrentItem().GetID()) - 1;
+	if ( ModList.size() <= index || index < 0)
+	{
+		return;
+	}
+
+	ModEntry& e = ModList[index];
+
+	if (e.Enabled && !TurnOffMod(e.Mod))
+	{
+		return;
+	}
+
+	std::error_code err;
+	if (std::filesystem::exists(GetApp()->GetModsDir() / (e.File + ".gpk")) && !std::filesystem::remove(GetApp()->GetModsDir() / (e.File + ".gpk"), err))
+	{
+		wxMessageBox(_("Failed to delete ") + e.File + ".gpk!", _("Error!"), wxICON_ERROR);
+		return;
+	}
+
+	ModList.erase(ModList.begin() + index);
+	GetApp()->UpdateModsList(ModList);
+	wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
 }
 
 void ModWindow::OnTurnOnAllClicked(wxCommandEvent& event)
 {
+	std::vector<bool> tmp;
+	for (auto& mod : ModList)
+	{
+		tmp.push_back(mod.Enabled);
+		if (!mod.Enabled)
+		{
+			mod.Enabled = true;
+			TurnOnMod(mod.Mod);
+		}
+	}
+	try
+	{
+		CompositeMap.Save();
+	}
+	catch (...)
+	{
+		wxMessageBox(_("Failed to save the CompositePackageMapper.dat!"), _("Error!"), wxICON_ERROR);
+		CompositeMap.Reload();
+		for (int idx = 0; idx < ModList.size(); ++idx)
+		{
+			ModList[idx].Enabled = tmp[idx];
+		}
+		return;
+	}
+	GetApp()->UpdateModsList(ModList);
+	wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
 }
 
 void ModWindow::OnTurnOffAllClicked(wxCommandEvent& event)
 {
+	std::vector<bool> tmp;
+	for (auto& mod : ModList)
+	{
+		tmp.push_back(mod.Enabled);
+		if (mod.Enabled)
+		{
+			mod.Enabled = false;
+			TurnOffMod(mod.Mod);
+		}
+	}
+	try
+	{
+		CompositeMap.Save();
+	}
+	catch (...)
+	{
+		wxMessageBox(_("Failed to save the CompositePackageMapper.dat!"), _("Error!"), wxICON_ERROR);
+		CompositeMap.Reload();
+		for (int idx = 0; idx < ModList.size(); ++idx)
+		{
+			ModList[idx].Enabled = tmp[idx];
+		}
+		return;
+	}
+	GetApp()->UpdateModsList(ModList);
+	wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
 }
 
 void ModWindow::OnChangeDirClicked(wxCommandEvent& event)
@@ -330,7 +427,7 @@ void ModWindow::OnIdle(wxIdleEvent& event)
 	Disconnect(wxEVT_IDLE, wxIdleEventHandler(ModWindow::OnIdle), NULL, this);
 
 	std::vector<ModEntry> missing;
-	for (ModEntry& entry : ModData)
+	for (ModEntry& entry : ModList)
 	{
 		std::filesystem::path path(GetApp()->GetModsDir() / entry.File);
 		path.replace_extension(".gpk");
@@ -357,69 +454,60 @@ void ModWindow::OnIdle(wxIdleEvent& event)
 	wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
 }
 
-void ModWindow::OnToggleMod(wxDataViewEvent& event)
+void ModWindow::OnRealoadModList(wxCommandEvent&)
 {
-	ModUIModel* model = (ModUIModel*)event.GetModel();
-	const auto& rows = model->GetRows();
-	for (const auto& row : rows)
+	ModListView->AssociateModel(new ModUIModel(ModList, this));
+	AllOffButton->Enable(false);
+	AllOnButton->Enable(false);
+	RemoveButton->Enable(ModList.size());
+	for (const auto& mod : ModList)
 	{
-		if (ModData[row.Index].Enabled != row.Enabled)
+		if (mod.Enabled)
 		{
-			ModData[row.Index].Enabled = row.Enabled;
-
-			bool ok = false;
-			if (row.Enabled)
+			AllOffButton->Enable(true);
+			if (AllOffButton->IsEnabled() && AllOnButton->IsEnabled())
 			{
-				ok = TurnOnMod(ModData[row.Index].Mod);
+				break;
 			}
-			else
+		}
+		else
+		{
+			AllOnButton->Enable(true);
+			if (AllOffButton->IsEnabled() && AllOnButton->IsEnabled())
 			{
-				ok = TurnOffMod(ModData[row.Index].Mod);
+				break;
 			}
-
-			if (ok)
-			{
-				try
-				{
-					CompositeMap.Save();
-				}
-				catch (...)
-				{
-					wxMessageBox(_("Failed to save the CompositePackageMapper.dat!"), _("Error!"), wxICON_ERROR);
-					CompositeMap = CompositeMapperFile(GetApp()->GetCompositeMapperPath());
-					ModData[row.Index].Enabled != ModData[row.Index].Enabled;
-					wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
-					return;
-				}
-				GetApp()->UpdateModsList(ModData);
-			}
-			else
-			{
-				CompositeMap = CompositeMapperFile(GetApp()->GetCompositeMapperPath());
-				ModData[row.Index].Enabled != ModData[row.Index].Enabled;
-				wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
-			}
-			break;
 		}
 	}
 }
 
-void ModWindow::OnRealoadModList(wxCommandEvent&)
+void ModWindow::OnModSelectionChanged(wxDataViewEvent& event)
 {
-	ModListView->AssociateModel(new ModUIModel(ModData));
-}
-
-void ModWindow::LoadModList()
-{
-}
-
-void ModWindow::InstallMod(const ModFile& mod)
-{
+	RemoveButton->Enable(ModListView->GetCurrentItem().GetID());
 }
 
 bool ModWindow::TurnOnMod(const ModFile& mod)
 {
 	// First run to check if we can turn this ON
+	// Check if any of the imported composite GPKs already used
+	for (const ModEntry& existingEntry : ModList)
+	{
+		if (!existingEntry.Enabled)
+		{
+			continue;
+		}
+		for (const ModFile::CompositePackage& existingPackage : existingEntry.Mod.Packages)
+		{
+			const std::string& incompletePath = existingPackage.IncompleteObjectPath;
+			if (std::any_of(mod.Packages.begin(), mod.Packages.end(), [&incompletePath](const ModFile::CompositePackage& p) { return incompletePath == p.IncompleteObjectPath; }))
+			{
+				wxMessageBox(wxString::Format(_("Can't turn on this mod because it's conflicting with the %s mod at %s"), existingEntry.Mod.ModName.c_str(), incompletePath.c_str()),
+					_("File already exists!"), wxICON_ERROR);
+				return false;
+			}
+		}
+	}
+	
 	for (const auto& package : mod.Packages)
 	{
 		CompositeEntry entry;
@@ -463,4 +551,5 @@ bool ModWindow::TurnOffMod(const ModFile& mod)
 
 wxBEGIN_EVENT_TABLE(ModWindow, wxFrame)
 EVT_COMMAND(wxID_ANY, RELOAD_MOD_LIST, ModWindow::OnRealoadModList)
+EVT_DATAVIEW_SELECTION_CHANGED(wxID_ANY, ModWindow::OnModSelectionChanged)
 wxEND_EVENT_TABLE()

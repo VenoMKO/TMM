@@ -3,23 +3,11 @@
 #include <vector>
 #include "Mod.h"
 
-class ModUIModelNode {
+class ModListDelegate {
 public:
-  ModUIModelNode()
+  virtual ~ModListDelegate()
   {}
-
-  ModUIModelNode(const ModEntry& e, int idx)
-    : Name(e.Mod.ModName)
-    , Author(e.Mod.ModAuthor)
-    , File(e.File + wxT(".gpk"))
-    , Enabled(e.Enabled)
-    , Index(idx)
-  {}
-  wxString Name;
-  wxString Author;
-  wxString File;
-  bool Enabled = false;
-  int Index = 0;
+  virtual bool OnModStateChange(ModEntry& mod) = 0;
 };
 
 class ModUIModel : public wxDataViewVirtualListModel {
@@ -33,7 +21,10 @@ public:
     Col_Max
   };
 
-  ModUIModel(const std::vector<ModEntry>& entries);
+  ModUIModel(std::vector<ModEntry>& entries, ModListDelegate* del)
+    : Rows(entries)
+    , Delegate(del)
+  {}
 
   unsigned int GetColumnCount() const override
   {
@@ -60,11 +51,7 @@ public:
 
   virtual bool SetValueByRow(const wxVariant& variant, unsigned int row, unsigned int col) override;
 
-  const std::vector<ModUIModelNode>& GetRows() const
-  {
-    return Rows;
-  }
-
 private:
-  std::vector<ModUIModelNode> Rows;
+  std::vector<ModEntry>& Rows;
+  ModListDelegate* Delegate = nullptr;
 };

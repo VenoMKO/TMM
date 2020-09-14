@@ -1,12 +1,6 @@
 #include "ModUIModel.h"
 
-ModUIModel::ModUIModel(const std::vector<ModEntry>& entries)
-{
-	for (int idx = 0; idx < entries.size(); ++idx)
-	{
-		Rows.emplace_back(entries[idx], idx);
-	}
-}
+
 
 void ModUIModel::GetValueByRow(wxVariant& variant, unsigned int row, unsigned int col) const
 {
@@ -16,13 +10,13 @@ void ModUIModel::GetValueByRow(wxVariant& variant, unsigned int row, unsigned in
 		variant = Rows[row].Enabled;
 		break;
 	case Col_Name:
-		variant = Rows[row].Name;
+		variant = Rows[row].Mod.ModName;
 		break;
 	case Col_Author:
-		variant = Rows[row].Author;
+		variant = Rows[row].Mod.ModAuthor;
 		break;
 	case Col_File:
-		variant = Rows[row].File;
+		variant = Rows[row].File + ".gpk";
 		break;
 	case Col_Max:
 		wxFAIL_MSG("invalid column");
@@ -39,7 +33,7 @@ bool ModUIModel::SetValueByRow(const wxVariant& variant, unsigned int row, unsig
 	if (col == Col_Check)
 	{
 		Rows[row].Enabled = variant.GetBool();
-		return true;
+		return Delegate->OnModStateChange(Rows[row]);
 	}
   return false;
 }

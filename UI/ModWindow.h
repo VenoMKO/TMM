@@ -5,14 +5,17 @@
 #include <wx/gauge.h>
 
 #include "../Model/Mod.h"
+#include "../Model/ModUIModel.h"
 #include "../Model/CompositeMapper.h"
 
 wxDECLARE_EVENT(RELOAD_MOD_LIST, wxCommandEvent);
 
-class ModWindow : public wxFrame
+class ModWindow : public wxFrame, public ModListDelegate
 {
 public:
 	ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxWindowID id = wxID_ANY, const wxString& title = _("Tera Mod Manager"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize(721, 434), long style = wxCAPTION | wxCLOSE_BOX | wxSYSTEM_MENU | wxTAB_TRAVERSAL);
+
+	bool OnModStateChange(ModEntry& mod) override;
 
 protected:
 	void OnAddClicked(wxCommandEvent& event);
@@ -23,11 +26,8 @@ protected:
 	void OnResetClicked(wxCommandEvent& event);
 	void OnMoreModsClicked(wxCommandEvent& event);
 	void OnIdle(wxIdleEvent& event);
-	void OnToggleMod(wxDataViewEvent& event);
 	void OnRealoadModList(wxCommandEvent&);
-
-	void LoadModList();
-	void InstallMod(const ModFile& mod);
+	void OnModSelectionChanged(wxDataViewEvent& event);
 
 	bool TurnOnMod(const ModFile& mod);
 	bool TurnOffMod(const ModFile& mod);
@@ -44,7 +44,7 @@ private:
 	wxHyperlinkCtrl* GitHubLink = nullptr;
 	wxGauge* ProgressBar = nullptr;
 
-	std::vector<ModEntry> ModData;
+	std::vector<ModEntry> ModList;
 	CompositeMapperFile CompositeMap;
 	CompositeMapperFile BackupMap;
 
