@@ -1,7 +1,5 @@
 #include "ModUIModel.h"
 
-
-
 void ModUIModel::GetValueByRow(wxVariant& variant, unsigned int row, unsigned int col) const
 {
 	switch (col)
@@ -10,10 +8,10 @@ void ModUIModel::GetValueByRow(wxVariant& variant, unsigned int row, unsigned in
 		variant = Rows[row].Enabled;
 		break;
 	case Col_Name:
-		variant = Rows[row].Mod.ModName;
+		variant = Rows[row].Mod.ModName.size() ? Rows[row].Mod.ModName : (Rows[row].File + ".gpk");
 		break;
 	case Col_Author:
-		variant = Rows[row].Mod.ModAuthor;
+		variant = Rows[row].Mod.ModAuthor.size() ? Rows[row].Mod.ModAuthor : "-";
 		break;
 	case Col_File:
 		variant = Rows[row].File + ".gpk";

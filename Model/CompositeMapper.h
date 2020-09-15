@@ -21,11 +21,19 @@ public:
   void Reload();
 
   void Save();
+
+  // Check if we'v ever marked this file
+  bool IsMarked() const;
+
+  // Mark this file to keep track of updates
+  void Mark(bool flag = true);
   
   // Get an entry by a composite package name. Returns true if found.
   bool GetEntryByCompositeName(const std::string& compositeName, CompositeEntry& output);
   // Get an entry by its incomplete object path. Returns true if found.
   bool GetEntryByIncompleteObjectPath(const std::string& incompletePath, CompositeEntry& output);
+  // Get an entry by its object path. Returns true if found.
+  bool GetEntryByObjectPath(const std::string& path, CompositeEntry& output);
   // Add/Modify an entry. Returns true if added, false - modified
   bool AddEntry(const CompositeEntry& entry);
   // Remove and entry. Returns true if removed.

@@ -66,6 +66,11 @@ std::ifstream& operator>>(std::ifstream& s, ModFile& m)
     // Package has metadata
     pos -= sizeof(int);
     s.seekg(pos);
+    int metaSize = 0;
+    s.read((char*)&metaSize, sizeof(metaSize));
+
+    pos -= sizeof(int);
+    s.seekg(pos);
     int compositeCount = 0;
     s.read((char*)&compositeCount, sizeof(compositeCount));
 
@@ -88,6 +93,12 @@ std::ifstream& operator>>(std::ifstream& s, ModFile& m)
     int authorOffset = 0;
     s.seekg(pos);
     s.read((char*)&authorOffset, sizeof(authorOffset));
+
+    pos -= sizeof(int);
+    int regionLock = 0;
+    s.seekg(pos);
+    s.read((char*)&regionLock, sizeof(regionLock));
+    m.RegionLock = regionLock;
 
     s.seekg(authorOffset);
     m.ModAuthor = GetString(s);
@@ -112,11 +123,11 @@ std::ifstream& operator>>(std::ifstream& s, ModFile& m)
       }
       s >> m.Packages[idx];
     }
-    m.Packages.back().Size = authorOffset - m.Packages.back().Offset;
+    m.Packages.back().Size = (end - metaSize) - m.Packages.back().Offset;
   }
   else
   {
-    // Package has no metadata, but it might have incomplete object path which should be enough for patching
+    // Package has no metadata, but it might have object path which should be enough for patching
     ModFile::CompositePackage& p = m.Packages.emplace_back();
     p.Size = (int)end;
     s.seekg(0);
@@ -164,7 +175,7 @@ std::ifstream& operator>>(std::ifstream& s, ModFile::CompositePackage& p)
   std::string folderName = GetString(s);
   if (folderName.find(ModPrefix) == 0)
   {
-    p.IncompleteObjectPath = folderName.substr(strlen(ModPrefix));
+    p.ObjectPath = folderName.substr(strlen(ModPrefix));
   }
   return s;
 }

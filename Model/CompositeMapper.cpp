@@ -120,6 +120,28 @@ void CompositeMapperFile::Save()
   EncryptMapper(SourcePath, newMapper);
 }
 
+bool CompositeMapperFile::IsMarked() const
+{
+  return CompositeMap.count(Marker);
+}
+
+void CompositeMapperFile::Mark(bool flag)
+{
+  if (flag)
+  {
+    CompositeMap[Marker].CompositeName = Marker;
+    CompositeMap[Marker].Filename = Marker;
+    CompositeMap[Marker].ObjectPath = Marker;
+  }
+  else
+  {
+    if (CompositeMap.count(Marker))
+    {
+      CompositeMap.erase(Marker);
+    }
+  }
+}
+
 bool CompositeMapperFile::GetEntryByCompositeName(const std::string& compositeName, CompositeEntry& output)
 {
   if (!CompositeMap.count(compositeName))
@@ -143,6 +165,21 @@ bool CompositeMapperFile::GetEntryByIncompleteObjectPath(const std::string& inco
     }
     std::string testPath = ToUpper(tmpPath.substr(pos + 1));
     if (testPath == incompletePathUpper)
+    {
+      output = pair.second;
+      return true;
+    }
+  }
+  return false;
+}
+
+bool CompositeMapperFile::GetEntryByObjectPath(const std::string& path, CompositeEntry& output)
+{
+  const std::string pathUpper = ToUpper(path);
+  for (auto& pair : CompositeMap)
+  {
+    std::string testPath = ToUpper(pair.second.ObjectPath);
+    if (testPath == pathUpper)
     {
       output = pair.second;
       return true;

@@ -4,6 +4,7 @@
 #include "../TMM.h"
 
 #include <wx/statline.h>
+#include <wx/filename.h>
 #include <fstream>
 
 const char* MoreModsLink = "https://www.tumblr.com/tagged/tera+mods";
@@ -85,7 +86,6 @@ ModWindow::ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxW
 	bSizer3->Add(ChangeDirButton, 0, wxALL | wxEXPAND, 5);
 
 	RestoreButton = new wxButton(m_panel1, ControlElementId::RestoreMapper, _("Restore original .dat"), wxDefaultPosition, wxDefaultSize, 0);
-	RestoreButton->Enable(false);
 
 	bSizer3->Add(RestoreButton, 0, wxALL | wxEXPAND, 5);
 
@@ -165,7 +165,7 @@ bool ModWindow::OnModStateChange(ModEntry& mod)
 		{
 			wxMessageBox(_("Failed to save the CompositePackageMapper.dat!"), _("Error!"), wxICON_ERROR);
 			CompositeMap.Reload();
-			mod.Enabled != mod.Enabled;
+			mod.Enabled = !mod.Enabled;
 			return false;
 		}
 		GetApp()->UpdateModsList(ModList);
@@ -173,7 +173,8 @@ bool ModWindow::OnModStateChange(ModEntry& mod)
 	else
 	{
 		CompositeMap.Reload();
-		mod.Enabled != mod.Enabled;
+		mod.Enabled = !mod.Enabled;
+		wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
 		return false;
 	}
 	return true;
@@ -193,8 +194,17 @@ void ModWindow::OnAddClicked(wxCommandEvent& event)
 	s >> mod;
 	if (mod.Packages.empty())
 	{
-		wxMessageBox(_("File is not a mod!"), _("Error!"), wxICON_INFORMATION);
+		wxMessageBox(_("File is not a mod!"), _("Error!"), wxICON_ERROR);
 		return;
+	}
+
+	if (mod.Container.empty())
+	{
+		wxString name;
+		wxFileName::SplitPath(path, nullptr, nullptr, &name, nullptr);
+		mod.ModName = name;
+		mod.ModAuthor = "-";
+		mod.Container = name;
 	}
 
 	// Check if the GPK is ok
@@ -203,16 +213,31 @@ void ModWindow::OnAddClicked(wxCommandEvent& event)
 		if (package.FileVersion == VER_TERA_MODERN)
 		{
 			CompositeEntry unused;
-			if (package.IncompleteObjectPath.empty())
+			if (package.ObjectPath.empty())
 			{
 				// One of the packages is not a composite package.
 				wxMessageBox(_("One of the packages in the mod is not composite."), _("Error!"), wxICON_ERROR);
 				return;
 			}
-			else if (!CompositeMap.GetEntryByIncompleteObjectPath(package.IncompleteObjectPath, unused))
+			else
 			{
-				wxMessageBox(wxString::Format(_("Failed to install the mod because your client has no \"%s\""), package.IncompleteObjectPath.c_str()), _("Error!"), wxICON_ERROR);
-				return;
+				if (mod.RegionLock)
+				{
+					if (!CompositeMap.GetEntryByObjectPath(package.ObjectPath, unused))
+					{
+						wxMessageBox(_("This mod is not designed for your region."), _("Failed to install the mod!"), wxICON_ERROR);
+						return;
+					}
+				}
+				else
+				{
+					std::string path = package.GetIncompleteObjectPath();
+					if (!CompositeMap.GetEntryByIncompleteObjectPath(path, unused))
+					{
+						wxMessageBox(wxString::Format(_("Failed to install the mod because your client has no \"%s\""), path.c_str()), _("Error!"), wxICON_ERROR);
+						return;
+					}
+				}
 			}
 			continue;
 		}
@@ -238,7 +263,7 @@ void ModWindow::OnAddClicked(wxCommandEvent& event)
 		if (entry.Mod.ModName == mod.ModName && entry.Mod.ModAuthor == mod.ModAuthor)
 		{
 			entryToDelete = idx;
-			if (wxMessageBox(_("You already have this mod installed. Do you want to update it?"), _("Error!"), wxICON_QUESTION | wxYES_NO) != wxYES)
+			if (wxMessageBox(_("You already have this mod installed.\nDo you want to update it?"), _("This mod already exists!"), wxICON_INFORMATION | wxYES_NO) != wxYES)
 			{
 				return;
 			}
@@ -248,8 +273,8 @@ void ModWindow::OnAddClicked(wxCommandEvent& event)
 		// Check if the mod GPK file already exists under another mod
 		if (entry.Mod.Container == mod.Container && std::filesystem::exists(dest))
 		{
-			auto result = wxMessageBox(wxString::Format(_("You already have %s file installed as a mod %s. Do you want to override it?"), mod.Container.c_str(), entry.Mod.ModName.c_str()),
-				_("File already exists!"), wxICON_QUESTION | wxYES_NO);
+			auto result = wxMessageBox(wxString::Format(_("You already have %s file installed as a mod %s.\nDo you want to replace it with the new one?"), mod.Container.c_str(), entry.Mod.ModName.c_str()),
+				_("File already exists!"), wxICON_INFORMATION | wxYES_NO);
 			if (result != wxYES)
 			{
 				return;
@@ -313,6 +338,11 @@ void ModWindow::OnRemoveClicked(wxCommandEvent& event)
 	}
 
 	ModEntry& e = ModList[index];
+	wxString modName = e.Mod.ModName.size() ? e.Mod.ModName : (e.File + ".gpk");
+	if (wxMessageBox(wxString::Format(_("You are sure you want to delete \"%s\" mod?"), modName.c_str()), _("Warning!"), wxICON_EXCLAMATION | wxYES_NO) != wxYES)
+	{
+		return;
+	}
 
 	if (e.Enabled && !TurnOffMod(e.Mod))
 	{
@@ -340,7 +370,10 @@ void ModWindow::OnTurnOnAllClicked(wxCommandEvent& event)
 		if (!mod.Enabled)
 		{
 			mod.Enabled = true;
-			TurnOnMod(mod.Mod);
+			if (!TurnOnMod(mod.Mod))
+			{
+				mod.Enabled = false;
+			}
 		}
 	}
 	try
@@ -415,6 +448,39 @@ void ModWindow::OnChangeDirClicked(wxCommandEvent& event)
 
 void ModWindow::OnResetClicked(wxCommandEvent& event)
 {
+	if (ModList.size() && wxMessageBox(_("Restoring original CompositePackageMapper.dat will turn off all of your mods.\nDo you want to continue?"), _("Warning!"), wxICON_INFORMATION | wxYES_NO) != wxYES)
+	{
+		return;
+	}
+	if (!std::filesystem::exists(GetApp()->GetBackupCompositeMapperPath()))
+	{
+		wxMessageBox(_("Try to delete CompositePackageMapperFile.dat and repair the client using game's launcher."), _("Couldn't locate the original file!"), wxICON_ERROR);
+		return;
+	}
+
+	std::error_code err;
+	if (std::filesystem::exists(GetApp()->GetCompositeMapperPath()) && !std::filesystem::remove(GetApp()->GetCompositeMapperPath(), err))
+	{
+		wxMessageBox(_("Couldn't delete the CompositePackageMapperFile.dat file! Make sure the game is not running!"), _("Error!"), wxICON_ERROR);
+		return;
+	}
+
+	for (ModEntry& entry : ModList)
+	{
+		entry.Enabled = false;
+	}
+	GetApp()->UpdateModsList(ModList);
+
+	if (!std::filesystem::copy_file(GetApp()->GetBackupCompositeMapperPath(), GetApp()->GetCompositeMapperPath(), err))
+	{
+		wxMessageBox(_("Couldn't to restore the CompositePackageMapperFile.dat file! Try to repair the client using game's launcher!"), _("Error!"), wxICON_ERROR);
+		GetApp()->ExitMainLoop();
+		return;
+	}
+
+	// Force reload
+	GetApp()->ChangeRootDir(GetApp()->GetRootDir());
+	Close();
 }
 
 void ModWindow::OnMoreModsClicked(wxCommandEvent& event)
@@ -437,11 +503,25 @@ void ModWindow::OnIdle(wxIdleEvent& event)
 		}
 		std::ifstream s(path, std::ios::binary | std::ios::in);
 		s >> entry.Mod;
+		if (entry.Mod.Container.empty())
+		{
+			entry.Mod.ModName = path.filename().string();
+			entry.Mod.ModAuthor = "-";
+			entry.Mod.Container = path.filename().string();
+		}
 	}
 
+	bool teraUpdated = false;
 	try
 	{
 		CompositeMap = CompositeMapperFile(GetApp()->GetCompositeMapperPath().wstring());
+		if (!CompositeMap.IsMarked())
+		{
+			CompositeMap.Mark();
+			CompositeMap.Save();
+			GetApp()->BackupCompositeMapperFile();
+			teraUpdated = true;
+		}
 		BackupMap = CompositeMapperFile(GetApp()->GetBackupCompositeMapperPath().wstring());
 	}
 	catch (...)
@@ -449,6 +529,50 @@ void ModWindow::OnIdle(wxIdleEvent& event)
 		wxMessageBox(_("Failed to load the CompositePackageMapper.dat"), _("Error!"), wxICON_ERROR);
 		GetApp()->ChangeRootDir({});
 		Close();
+	}
+
+	bool saveList = false;
+	if (teraUpdated)
+	{
+		for (ModEntry& entry : ModList)
+		{
+			if (!entry.Enabled)
+			{
+				continue;
+			}
+
+			// Find first turned on mod and ask user. On NO turn off all mods.
+			if (wxMessageBox(_("Looks like Tera has been updated. Do you want to enable mods you used with the previous update?"), wxEmptyString, wxICON_INFORMATION | wxYES_NO) != wxYES)
+			{
+				saveList = true;
+				for (ModEntry& tentry : ModList)
+				{
+					tentry.Enabled = false;
+				}
+			}
+			break;
+		}
+	}
+
+	// Turn on all mods to make sure tmm is in sync with the map file
+	for (ModEntry& entry : ModList)
+	{
+		if (!entry.Enabled)
+		{
+			continue;
+		}
+		if (!TurnOnMod(entry.Mod))
+		{
+			saveList = true;
+			entry.Enabled = false;
+		}
+	}
+
+	CompositeMap.Save();
+
+	if (saveList)
+	{
+		GetApp()->UpdateModsList(ModList);
 	}
 
 	wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
@@ -459,7 +583,7 @@ void ModWindow::OnRealoadModList(wxCommandEvent&)
 	ModListView->AssociateModel(new ModUIModel(ModList, this));
 	AllOffButton->Enable(false);
 	AllOnButton->Enable(false);
-	RemoveButton->Enable(ModList.size());
+	RemoveButton->Enable(ModListView->HasSelection());
 	for (const auto& mod : ModList)
 	{
 		if (mod.Enabled)
@@ -483,26 +607,28 @@ void ModWindow::OnRealoadModList(wxCommandEvent&)
 
 void ModWindow::OnModSelectionChanged(wxDataViewEvent& event)
 {
-	RemoveButton->Enable(ModListView->GetCurrentItem().GetID());
+	RemoveButton->Enable(ModListView->HasSelection());
 }
 
 bool ModWindow::TurnOnMod(const ModFile& mod)
 {
 	// First run to check if we can turn this ON
 	// Check if any of the imported composite GPKs already used
-	for (const ModEntry& existingEntry : ModList)
+	for (ModEntry& existingEntry : ModList)
 	{
-		if (!existingEntry.Enabled)
+		if (!existingEntry.Enabled || (&existingEntry.Mod == &mod))
 		{
 			continue;
 		}
-		for (const ModFile::CompositePackage& existingPackage : existingEntry.Mod.Packages)
+		for (ModFile::CompositePackage& existingPackage : existingEntry.Mod.Packages)
 		{
-			const std::string& incompletePath = existingPackage.IncompleteObjectPath;
-			if (std::any_of(mod.Packages.begin(), mod.Packages.end(), [&incompletePath](const ModFile::CompositePackage& p) { return incompletePath == p.IncompleteObjectPath; }))
+			const std::string& incompletePath = existingPackage.GetIncompleteObjectPath();
+			if (std::any_of(mod.Packages.begin(), mod.Packages.end(), [&incompletePath](const ModFile::CompositePackage& p) { return incompletePath == p.GetIncompleteObjectPath(); }))
 			{
-				wxMessageBox(wxString::Format(_("Can't turn on this mod because it's conflicting with the %s mod at %s"), existingEntry.Mod.ModName.c_str(), incompletePath.c_str()),
-					_("File already exists!"), wxICON_ERROR);
+				const char* newModName = mod.ModName.c_str();
+				const char* existingModName = existingEntry.Mod.ModName.c_str();
+				wxMessageBox(wxString::Format(_("Can't turn on \"%s\" mod because it's conflicting with the \"%s\" mod.\nConflicting path: %s\nTry to turn off \"%s\" mod first."), newModName, existingModName, incompletePath.c_str(), existingModName),
+					_("Mod conflict!"), wxICON_ERROR);
 				return false;
 			}
 		}
@@ -511,17 +637,37 @@ bool ModWindow::TurnOnMod(const ModFile& mod)
 	for (const auto& package : mod.Packages)
 	{
 		CompositeEntry entry;
-		if (!CompositeMap.GetEntryByIncompleteObjectPath(package.IncompleteObjectPath, entry))
+		if (mod.RegionLock)
 		{
-			wxMessageBox(wxString::Format(_("Failed to get composite entry: %s"), package.IncompleteObjectPath.c_str()), _("Error!"), wxICON_ERROR);
-			return false;
+			if (!CompositeMap.GetEntryByObjectPath(package.ObjectPath, entry))
+			{
+				wxMessageBox(wxString::Format(_("Failed to get composite entry: %s"), package.ObjectPath.c_str()), _("Error!"), wxICON_ERROR);
+				return false;
+			}
 		}
+		else
+		{
+			std::string objpath = package.GetIncompleteObjectPath();
+			if (!CompositeMap.GetEntryByIncompleteObjectPath(objpath, entry))
+			{
+				wxMessageBox(wxString::Format(_("Failed to get composite entry: %s"), objpath.c_str()), _("Error!"), wxICON_ERROR);
+				return false;
+			}
+		}
+		
 	}
 
 	for (const auto& package : mod.Packages)
 	{
 		CompositeEntry entry;
-		CompositeMap.GetEntryByIncompleteObjectPath(package.IncompleteObjectPath, entry);
+		if (mod.RegionLock)
+		{
+			CompositeMap.GetEntryByObjectPath(package.ObjectPath, entry);
+		}
+		else
+		{
+			CompositeMap.GetEntryByIncompleteObjectPath(package.GetIncompleteObjectPath(), entry);
+		}
 		entry.Filename = mod.Container;
 		entry.Offset = package.Offset;
 		entry.Size = package.Size;
@@ -535,9 +681,9 @@ bool ModWindow::TurnOffMod(const ModFile& mod)
 	for (const auto& package : mod.Packages)
 	{
 		CompositeEntry entry;
-		if (!BackupMap.GetEntryByIncompleteObjectPath(package.IncompleteObjectPath, entry))
+		if (!BackupMap.GetEntryByIncompleteObjectPath(package.GetIncompleteObjectPath(), entry))
 		{
-			wxMessageBox(wxString::Format(_("Failed to find original entry: %s. Try to restore the CompositePackageMapper.dat file."), package.IncompleteObjectPath.c_str()), _("Error!"), wxICON_ERROR);
+			wxMessageBox(wxString::Format(_("Failed to find original entry: %s. Try to restore the CompositePackageMapper.dat file."), package.GetIncompleteObjectPath().c_str()), _("Error!"), wxICON_ERROR);
 			return false;
 		}
 		backup.push_back(entry);
