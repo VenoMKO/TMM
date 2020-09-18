@@ -17,7 +17,7 @@ const char* ConfigFileRootKey = "RootDir";
 const char* GameConfigFilePath = "ModList.tmm";
 
 const char* CompositeMapperFile = "CompositePackageMapper.dat";
-const char* CompositeMapperBackupFile = "CompositePackageMapper.backup";
+const char* CompositeMapperBackupFile = "CompositePackageMapper.clean";
 
 const char* CookedPcDir = "CookedPC";
 const char* ModsStorageDir = "CookedPC";
@@ -165,16 +165,5 @@ bool TMM::SetupPaths()
   ModsDir = RootDir / ModsStorageDir;
   BackupCompositeMapperPath = ModsDir / CompositeMapperBackupFile;
   GameConfigPath = ModsDir / GameConfigFilePath;
-
-  if (!std::filesystem::exists(ModsDir))
-  {
-    std::filesystem::create_directory(ModsDir);
-    std::filesystem::copy_file(CompositeMapperPath, BackupCompositeMapperPath);
-  }
-
-  if (!std::filesystem::exists(BackupCompositeMapperPath))
-  {
-    std::filesystem::copy_file(CompositeMapperPath, BackupCompositeMapperPath);
-  }
   return true;
 }

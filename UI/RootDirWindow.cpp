@@ -10,6 +10,7 @@ bool IsValidDir(const wxString& path)
 RootDirWindow::RootDirWindow(wxWindow* parent, const wxString& rootDir, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style)
 	: wxDialog(parent, id, title, pos, size, style)
 {
+	SetIcon(wxICON(#101));
 	SetSizeHints(wxDefaultSize, wxDefaultSize);
 
 	wxBoxSizer* bSizer8;

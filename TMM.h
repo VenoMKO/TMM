@@ -6,6 +6,9 @@
 
 #include "Model/Mod.h"
 
+#define APP_VER_MAJOR 1
+#define APP_VER_MINOR 0
+
 class TMM : public wxApp {
 public:
   void LoadAppConfig();

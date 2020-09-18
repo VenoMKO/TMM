@@ -30,7 +30,7 @@ protected:
 	void OnModSelectionChanged(wxDataViewEvent& event);
 
 	bool TurnOnMod(const ModFile& mod);
-	bool TurnOffMod(const ModFile& mod);
+	bool TurnOffMod(const ModFile& mod, bool silent = false);
 
 private:
 	wxDataViewCtrl* ModListView = nullptr;

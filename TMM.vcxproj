@@ -81,6 +81,8 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)Build\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)Build\$(Configuration)\Objs\</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -148,6 +150,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Model\ModUIModel.h" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="TMM.h" />
     <ClInclude Include="Model\CompositeMapper.h" />
     <ClInclude Include="Model\Mod.h" />
@@ -163,6 +166,12 @@
     <ClCompile Include="UI\ModWindow.cpp" />
     <ClCompile Include="UI\RootDirWindow.cpp" />
     <ClCompile Include="Utils.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="TMM.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="Resources\AppIcon.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
