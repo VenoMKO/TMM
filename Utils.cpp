@@ -4,6 +4,38 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+bool IncompletePathsEqual(const std::string& a, const std::string& b)
+{
+  auto pos = a.find('.');
+  if (pos == std::string::npos)
+  {
+    return false;
+  }
+  const std::string_view objPathA(&a[pos + 1]);
+  pos = a.rfind('_', pos);
+  if (pos == std::string::npos)
+  {
+    return false;
+  }
+  const std::string_view compositeA(&a[0], pos);
+
+
+  pos = b.find('.');
+  if (pos == std::string::npos)
+  {
+    return false;
+  }
+  const std::string_view objPathB(&b[pos + 1]);
+  pos = b.rfind('_', pos);
+  if (pos == std::string::npos)
+  {
+    return false;
+  }
+  const std::string_view compositeB(&b[0], pos);
+
+  return compositeA == compositeB && objPathA == objPathB;
+}
+
 std::string W2A(const wchar_t* str, int len)
 {
   if (len == -1)

@@ -29,6 +29,7 @@ protected:
 	void OnRealoadModList(wxCommandEvent&);
 	void OnModSelectionChanged(wxDataViewEvent& event);
 
+	bool InstallMod(const std::wstring& path);
 	bool TurnOnMod(const ModFile& mod);
 	bool TurnOffMod(const ModFile& mod, bool silent = false);
 

@@ -3,6 +3,8 @@
 #include <map>
 #include <vector>
 
+#include "Mod.h"
+
 struct CompositeEntry {
   std::string Filename;
   std::string ObjectPath;

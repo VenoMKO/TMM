@@ -8,14 +8,9 @@ struct ModFile {
   struct CompositePackage {
     friend std::ifstream& operator>>(std::ifstream& s, CompositePackage& p);
 
-    std::string GetIncompleteObjectPath() const
+    bool operator==(const CompositePackage& a) const
     {
-      size_t pos = ObjectPath.find('.');
-      if (pos == std::string::npos)
-      {
-        return ObjectPath;
-      }
-      return ObjectPath.substr(pos + 1);
+      return ObjectPath == a.ObjectPath && Offset == a.Offset && Size == a.Size && FileVersion == a.FileVersion && LicenseeVersion == a.LicenseeVersion;
     }
 
     std::string ObjectPath;
@@ -39,6 +34,11 @@ struct ModEntry {
   std::string File;
   bool Enabled = false;
   ModFile Mod;
+
+  bool operator==(const ModEntry& a) const
+  {
+    return File == a.File && Mod.Container == a.Mod.Container && Mod.ModAuthor == a.Mod.ModAuthor && Mod.ModName == a.Mod.ModName && Mod.Packages == a.Mod.Packages;
+  }
 };
 
 // A file containing game-specific info

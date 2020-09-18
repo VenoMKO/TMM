@@ -38,7 +38,7 @@ ModWindow::ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxW
 	wxBoxSizer* bSizer2;
 	bSizer2 = new wxBoxSizer(wxHORIZONTAL);
 
-	ModListView = new wxDataViewCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0);
+	ModListView = new wxDataViewCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxDV_MULTIPLE);
 	bSizer2->Add(ModListView, 1, wxALL | wxEXPAND, 5);
 
 	wxBoxSizer* bSizer12;
@@ -183,181 +183,77 @@ bool ModWindow::OnModStateChange(ModEntry& mod)
 
 void ModWindow::OnAddClicked(wxCommandEvent& event)
 {
-	const wxString extensions = _("Package files (*.gpk; *.gmp; *.u; *.umap; *.upk)|*.gpk;*.gmp;*.u;*.umap;*.upk");
-	wxString path = wxFileSelector(_("Open a package"), wxEmptyString, wxEmptyString, extensions, extensions, wxFD_OPEN | wxFD_FILE_MUST_EXIST);
-	if (path.empty())
+	wxFileDialog fileDialog(this, wxT("Add mods"), wxEmptyString,
+		wxEmptyString, wxT("Tera Game Package (*.gpk)|*.gpk"),
+		wxFD_OPEN | wxFD_FILE_MUST_EXIST | wxFD_MULTIPLE);
+
+	if (fileDialog.ShowModal() != wxID_OK)
+	{
+		return;
+	}
+	wxArrayString result;
+	fileDialog.GetPaths(result);
+	if (result.empty())
 	{
 		return;
 	}
 
-	std::ifstream s(path.ToStdWstring(), std::ios::binary | std::ios::in);
-	ModFile mod;
-	s >> mod;
-	if (mod.Packages.empty())
+	for (const wxString& path : result)
 	{
-		wxMessageBox(_("File is not a mod!"), _("Error!"), wxICON_ERROR);
-		return;
+		InstallMod(path.ToStdWstring());
 	}
 
-	if (mod.Container.empty())
-	{
-		wxString name;
-		wxFileName::SplitPath(path, nullptr, nullptr, &name, nullptr);
-		mod.ModName = name;
-		mod.ModAuthor = "-";
-		mod.Container = name;
-	}
-
-	// Check if the GPK is ok
-	for (const auto& package : mod.Packages)
-	{
-		if (package.FileVersion == VER_TERA_MODERN)
-		{
-			CompositeEntry unused;
-			if (package.ObjectPath.empty())
-			{
-				// One of the packages is not a composite package.
-				wxMessageBox(_("One of the packages in the mod is not composite.\nTry to copy this file to a \"_Mods\" folder or ask mod author how to install it!"), _("Failed to add the mod!"), wxICON_ERROR);
-				return;
-			}
-			else
-			{
-				if (mod.RegionLock)
-				{
-					if (!CompositeMap.GetEntryByObjectPath(package.ObjectPath, unused))
-					{
-						wxMessageBox(_("Can't add this mod because it is not compatible with your region.\nAsk mod author for more details!"), _("Failed to add the mod!"), wxICON_ERROR);
-						return;
-					}
-				}
-				else
-				{
-					std::string path = package.GetIncompleteObjectPath();
-					if (!CompositeMap.GetEntryByIncompleteObjectPath(path, unused))
-					{
-						wxMessageBox(wxString::Format(_("Failed to add the mod because your client has no \"%s\".\nTry to disable all mods, or contact mod author!"), path.c_str()), _("Failed to add the mod!"), wxICON_ERROR);
-						return;
-					}
-				}
-			}
-			continue;
-		}
-		if (package.FileVersion == VER_TERA_CLASSIC)
-		{
-			wxMessageBox(_("Can't add this mod because it is a 32-bit mod! Ask mod author to update it!"), _("Failed to add the mod!"), wxICON_ERROR);
-		}
-		else
-		{
-			wxMessageBox(wxString::Format(_("Can't add this mod! Unknown package version %uh."), package.FileVersion), _("Error!"), wxICON_ERROR);
-		}
-		return;
-	}
-
-	std::filesystem::path source(path.ToStdWstring());
-	std::filesystem::path dest = GetApp()->GetModsDir() / (mod.Container + ".gpk");
-
-	// Search for conflicts
-	int entryToDelete = -1;
-	for (int idx = 0; idx < ModList.size(); ++idx)
-	{
-		const ModEntry& entry = ModList[idx];
-		if (entry.Mod.ModName == mod.ModName && entry.Mod.ModAuthor == mod.ModAuthor)
-		{
-			entryToDelete = idx;
-			if (wxMessageBox(_("You already have this mod installed.\nDo you want to update it?"), _("This mod already exists!"), wxICON_INFORMATION | wxYES_NO) != wxYES)
-			{
-				return;
-			}
-			break;
-		}
-
-		// Check if the mod GPK file already exists under another mod
-		if (entry.Mod.Container == mod.Container && std::filesystem::exists(dest))
-		{
-			auto result = wxMessageBox(wxString::Format(_("You already have \"%s\" file installed as a mod \"%s\".\nDo you want to replace it with the new one?"), mod.Container.c_str(), entry.Mod.ModName.c_str()),
-				_("File already exists!"), wxICON_INFORMATION | wxYES_NO);
-			if (result != wxYES)
-			{
-				return;
-			}
-			std::error_code err;
-			if (!std::filesystem::remove(dest, err))
-			{
-				wxMessageBox(wxString::Format(_("Failed to delete the old mod file \"%s\""), dest.filename().c_str()), _("Error!"), wxICON_ERROR);
-				return;
-			}
-
-			entryToDelete = idx;
-			break;
-		}
-	}
-	
-	// Copy the mod file unless in is already in the mod dir
-	if (source != dest)
-	{
-		std::error_code err;
-		if (std::filesystem::exists(dest))
-		{
-			if (!std::filesystem::remove(dest, err))
-			{
-				wxMessageBox(wxString::Format(_("Failed to copy \"%s\" to the mod folder. File already exists!"), source.filename().c_str()), _("Error!"), wxICON_ERROR);
-				return;
-			}
-		}
-		if (!std::filesystem::copy_file(source, dest, err))
-		{
-			wxMessageBox(wxString::Format(_("Failed to copy \"%s\" to the mod folder. Try to run TMM as an administrator."), source.filename().c_str()), _("Error!"), wxICON_ERROR);
-			return;
-		}
-	}
-
-	if (entryToDelete >= 0)
-	{
-		ModList.erase(ModList.begin() + entryToDelete);
-	}
-
-	ModEntry newMod;
-	if (TurnOnMod(mod))
-	{
-		newMod.Enabled = true;
-		CompositeMap.Save();
-	}
-	
-	newMod.File = mod.Container;
-	newMod.Mod = mod;
-	ModList.push_back(newMod);
 	GetApp()->UpdateModsList(ModList);
 	wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
 }
 
 void ModWindow::OnRemoveClicked(wxCommandEvent& event)
 {
-	int index = int(ModListView->GetCurrentItem().GetID()) - 1;
-	if ( ModList.size() <= index || index < 0)
+	wxDataViewItemArray selection;
+	ModListView->GetSelections(selection);
+	if (!selection.GetCount())
 	{
 		return;
 	}
-
-	ModEntry& e = ModList[index];
-	wxString modName = e.Mod.ModName.size() ? e.Mod.ModName : (e.File + ".gpk");
-	if (wxMessageBox(wxString::Format(_("You are sure you want to delete the \"%s\" mod?"), modName.c_str()), _("Warning!"), wxICON_EXCLAMATION | wxYES_NO) != wxYES)
+	else if (selection.GetCount() == 1)
 	{
-		return;
+		ModEntry& e = ModList[int(ModListView->GetCurrentItem().GetID()) - 1];
+		wxString modName = e.Mod.ModName.size() ? e.Mod.ModName : (e.File + ".gpk");
+		if (wxMessageBox(wxString::Format(_("You are sure you want to delete the \"%s\" mod?"), modName.c_str()), _("Warning!"), wxICON_EXCLAMATION | wxYES_NO) != wxYES)
+		{
+			return;
+		}
+	}
+	else
+	{
+		if (wxMessageBox(_("You are sure you want to delete all selected mods?"), _("Warning!"), wxICON_EXCLAMATION | wxYES_NO) != wxYES)
+		{
+			return;
+		}
 	}
 
-	if (e.Enabled && !TurnOffMod(e.Mod))
+	std::vector<ModEntry> itemsToRemove;
+	for (auto& item : selection)
 	{
-		return;
+		itemsToRemove.push_back(ModList[int(item.GetID()) - 1]);
 	}
-
-	std::error_code err;
-	if (std::filesystem::exists(GetApp()->GetModsDir() / (e.File + ".gpk")) && !std::filesystem::remove(GetApp()->GetModsDir() / (e.File + ".gpk"), err))
+	for (ModEntry& e : itemsToRemove)
 	{
-		wxMessageBox(_("Failed to delete the ") + e.File + ".gpk!", _("Error!"), wxICON_ERROR);
-		return;
-	}
+		wxString modName = e.Mod.ModName.size() ? e.Mod.ModName : (e.File + ".gpk");
+		if (e.Enabled && !TurnOffMod(e.Mod))
+		{
+			continue;
+		}
 
-	ModList.erase(ModList.begin() + index);
+		std::error_code err;
+		if (std::filesystem::exists(GetApp()->GetModsDir() / (e.File + ".gpk")) && !std::filesystem::remove(GetApp()->GetModsDir() / (e.File + ".gpk"), err))
+		{
+			wxMessageBox(_("Failed to delete the ") + e.File + ".gpk!", _("Error!"), wxICON_ERROR);
+			continue;
+		}
+		ModList.erase(std::remove(ModList.begin(), ModList.end(), e), ModList.end());
+	}
+	
 	GetApp()->UpdateModsList(ModList);
 	wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
 }
@@ -632,24 +528,165 @@ void ModWindow::OnModSelectionChanged(wxDataViewEvent& event)
 	RemoveButton->Enable(ModListView->HasSelection());
 }
 
+bool ModWindow::InstallMod(const std::wstring& path)
+{
+	std::ifstream s(path, std::ios::binary | std::ios::in);
+	ModFile mod;
+	s >> mod;
+	if (mod.Packages.empty())
+	{
+		std::filesystem::path item(path);
+		wxMessageBox(wxString::Format(_("File \"%s\" is not a mod!"), item.c_str()), _("Error!"), wxICON_ERROR);
+		return false;
+	}
+
+	if (mod.Container.empty())
+	{
+		wxString name;
+		wxFileName::SplitPath(path, nullptr, nullptr, &name, nullptr);
+		mod.ModName = name;
+		mod.ModAuthor = "-";
+		mod.Container = name;
+	}
+
+	// Check if the GPK is ok
+	for (const auto& package : mod.Packages)
+	{
+		if (package.FileVersion == VER_TERA_MODERN)
+		{
+			CompositeEntry unused;
+			if (package.ObjectPath.empty())
+			{
+				// One of the packages is not a composite package.
+				wxMessageBox(wxString::Format(_("One of the packages in \"%s\" mod is not composite.\nTry to copy this file to a \"_Mods\" folder or ask mod author how to install it!"), mod.ModName.c_str()), _("Failed to add the mod!"), wxICON_ERROR);
+				return false;
+			}
+			else
+			{
+				if (mod.RegionLock)
+				{
+					if (!CompositeMap.GetEntryByObjectPath(package.ObjectPath, unused))
+					{
+						wxMessageBox(wxString::Format(_("Can't add \"%s\" mod because it is not compatible with your region.\nAsk mod author for more details!"), mod.ModName.c_str()), _("Failed to add the mod!"), wxICON_ERROR);
+						return false;
+					}
+				}
+				else
+				{
+					if (!CompositeMap.GetEntryByIncompleteObjectPath(package.ObjectPath, unused))
+					{
+						wxMessageBox(wxString::Format(_("Failed to add \"%s\" mod because your client has no \"%s\".\nTry to disable all mods, or contact mod author!"), mod.ModName.c_str(), package.ObjectPath.c_str()), _("Failed to add the mod!"), wxICON_ERROR);
+						return false;
+					}
+				}
+			}
+			continue;
+		}
+		if (package.FileVersion == VER_TERA_CLASSIC)
+		{
+			wxMessageBox(wxString::Format(_("Can't add \"%s\" mod because it is a 32-bit mod! Ask mod author to update it!"), mod.ModName.c_str()), _("Failed to add the mod!"), wxICON_ERROR);
+		}
+		else
+		{
+			wxMessageBox(wxString::Format(_("Can't add \"%s\" mod! Unknown package version %uh."), mod.ModName.c_str(), package.FileVersion), _("Error!"), wxICON_ERROR);
+		}
+		return false;
+	}
+
+	std::filesystem::path source(path);
+	std::filesystem::path dest = GetApp()->GetModsDir() / (mod.Container + ".gpk");
+
+	// Search for conflicts
+	int entryToDelete = -1;
+	for (int idx = 0; idx < ModList.size(); ++idx)
+	{
+		const ModEntry& entry = ModList[idx];
+		if (entry.Mod.ModName == mod.ModName && entry.Mod.ModAuthor == mod.ModAuthor)
+		{
+			entryToDelete = idx;
+			if (wxMessageBox(wxString::Format(_("You already have \"%s\" installed.\nDo you want to update it?"), mod.ModName.c_str()), _("This mod already exists!"), wxICON_INFORMATION | wxYES_NO) != wxYES)
+			{
+				return false;
+			}
+			break;
+		}
+
+		// Check if the mod GPK file already exists under another mod
+		if (entry.Mod.Container == mod.Container && std::filesystem::exists(dest))
+		{
+			auto result = wxMessageBox(wxString::Format(_("You already have \"%s\" file installed as a mod \"%s\".\nDo you want to replace it with the new one?"), mod.Container.c_str(), entry.Mod.ModName.c_str()),
+				_("File already exists!"), wxICON_INFORMATION | wxYES_NO);
+			if (result != wxYES)
+			{
+				return false;
+			}
+			std::error_code err;
+			if (!std::filesystem::remove(dest, err))
+			{
+				wxMessageBox(wxString::Format(_("Failed to delete the old mod file \"%s\""), dest.filename().c_str()), _("Error!"), wxICON_ERROR);
+				return false;
+			}
+
+			entryToDelete = idx;
+			break;
+		}
+	}
+
+	// Copy the mod file unless in is already in the mod dir
+	if (source != dest)
+	{
+		std::error_code err;
+		if (std::filesystem::exists(dest))
+		{
+			if (!std::filesystem::remove(dest, err))
+			{
+				wxMessageBox(wxString::Format(_("Failed to copy \"%s\" to the mod folder. File already exists!"), source.filename().c_str()), _("Error!"), wxICON_ERROR);
+				return false;
+			}
+		}
+		if (!std::filesystem::copy_file(source, dest, err))
+		{
+			wxMessageBox(wxString::Format(_("Failed to copy \"%s\" to the mod folder. Try to run TMM as an administrator."), source.filename().c_str()), _("Error!"), wxICON_ERROR);
+			return false;
+		}
+	}
+
+	if (entryToDelete >= 0)
+	{
+		ModList.erase(ModList.begin() + entryToDelete);
+	}
+
+	ModEntry newMod;
+	if (TurnOnMod(mod))
+	{
+		newMod.Enabled = true;
+		CompositeMap.Save();
+	}
+
+	newMod.File = mod.Container;
+	newMod.Mod = mod;
+	ModList.push_back(newMod);
+	return true;
+}
+
 bool ModWindow::TurnOnMod(const ModFile& mod)
 {
 	// First run to check if we can turn this ON
 	// Check if any of the imported composite GPKs already used
-	for (ModEntry& existingEntry : ModList)
+	for (const ModEntry& existingEntry : ModList)
 	{
 		if (!existingEntry.Enabled || (&existingEntry.Mod == &mod))
 		{
 			continue;
 		}
-		for (ModFile::CompositePackage& existingPackage : existingEntry.Mod.Packages)
+		for (const ModFile::CompositePackage& existingPackage : existingEntry.Mod.Packages)
 		{
-			const std::string& incompletePath = existingPackage.GetIncompleteObjectPath();
-			if (std::any_of(mod.Packages.begin(), mod.Packages.end(), [&incompletePath](const ModFile::CompositePackage& p) { return incompletePath == p.GetIncompleteObjectPath(); }))
+			const std::string& objPath = existingPackage.ObjectPath;
+			if (std::any_of(mod.Packages.begin(), mod.Packages.end(), [&objPath](const ModFile::CompositePackage& p) { return IncompletePathsEqual(objPath, p.ObjectPath); }))
 			{
 				const char* newModName = mod.ModName.c_str();
 				const char* existingModName = existingEntry.Mod.ModName.c_str();
-				wxMessageBox(wxString::Format(_("Can't turn on \"%s\" mod because it's conflicting with the \"%s\" mod.\nConflicting path: \"%s\"\nTry to turn off \"%s\" mod first."), newModName, existingModName, incompletePath.c_str(), existingModName),
+				wxMessageBox(wxString::Format(_("Can't turn on \"%s\" mod because it's conflicting with the \"%s\" mod.\nConflicting path: \"%s\"\nTry to turn off \"%s\" mod first."), newModName, existingModName, objPath.c_str(), existingModName),
 					_("Mod conflict!"), wxICON_ERROR);
 				return false;
 			}
@@ -669,10 +706,9 @@ bool ModWindow::TurnOnMod(const ModFile& mod)
 		}
 		else
 		{
-			std::string objpath = package.GetIncompleteObjectPath();
-			if (!CompositeMap.GetEntryByIncompleteObjectPath(objpath, entry))
+			if (!CompositeMap.GetEntryByIncompleteObjectPath(package.ObjectPath, entry))
 			{
-				wxMessageBox(wxString::Format(_("Failed to get composite entry: %s"), objpath.c_str()), _("Error!"), wxICON_ERROR);
+				wxMessageBox(wxString::Format(_("Failed to get composite entry: %s"), package.ObjectPath.c_str()), _("Error!"), wxICON_ERROR);
 				return false;
 			}
 		}
@@ -688,7 +724,7 @@ bool ModWindow::TurnOnMod(const ModFile& mod)
 		}
 		else
 		{
-			CompositeMap.GetEntryByIncompleteObjectPath(package.GetIncompleteObjectPath(), entry);
+			CompositeMap.GetEntryByIncompleteObjectPath(package.ObjectPath, entry);
 		}
 		entry.Filename = mod.Container;
 		entry.Offset = package.Offset;
@@ -703,11 +739,11 @@ bool ModWindow::TurnOffMod(const ModFile& mod, bool silent)
 	for (const auto& package : mod.Packages)
 	{
 		CompositeEntry entry;
-		if (!BackupMap.GetEntryByIncompleteObjectPath(package.GetIncompleteObjectPath(), entry))
+		if (!BackupMap.GetEntryByIncompleteObjectPath(package.ObjectPath, entry))
 		{
 			if (!silent)
 			{
-				wxMessageBox(wxString::Format(_("Failed to find original entry: %s. Try to restore the CompositePackageMapper.dat file."), package.GetIncompleteObjectPath().c_str()), _("Error!"), wxICON_ERROR);
+				wxMessageBox(wxString::Format(_("Failed to find original entry: %s. Try to restore the CompositePackageMapper.dat file."), package.ObjectPath.c_str()), _("Error!"), wxICON_ERROR);
 			}
 			return false;
 		}

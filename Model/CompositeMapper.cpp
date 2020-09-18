@@ -5,6 +5,7 @@
 #include <array>
 #include <thread>
 #include <vector>
+#include <filesystem>
 #include <exception>
 
 const char Key1[] = { 12, 6, 9, 4, 3, 14, 1, 10, 13, 2, 7, 15, 0, 8, 5, 11 };
@@ -157,14 +158,7 @@ bool CompositeMapperFile::GetEntryByIncompleteObjectPath(const std::string& inco
   const std::string incompletePathUpper = ToUpper(incompletePath);
   for (auto& pair : CompositeMap)
   {
-    std::string& tmpPath = pair.second.ObjectPath;
-    size_t pos = tmpPath.find('.');
-    if (pos == std::string::npos)
-    {
-      continue;
-    }
-    std::string testPath = ToUpper(tmpPath.substr(pos + 1));
-    if (testPath == incompletePathUpper)
+    if (IncompletePathsEqual(ToUpper(pair.second.ObjectPath), incompletePathUpper))
     {
       output = pair.second;
       return true;
