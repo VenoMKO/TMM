@@ -66,15 +66,15 @@ ModWindow::ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxW
 	wxBoxSizer* bSizer41;
 	bSizer41 = new wxBoxSizer(wxHORIZONTAL);
 
-	AllOnButton = new wxButton(m_panel1, ControlElementId::AllOn, _("Turn on all"), wxDefaultPosition, wxDefaultSize, 0);
-	AllOnButton->Enable(false);
+	OnButton = new wxButton(m_panel1, ControlElementId::AllOn, _("Turn on"), wxDefaultPosition, wxDefaultSize, 0);
+	OnButton->Enable(false);
 
-	bSizer41->Add(AllOnButton, 1, wxALL, 5);
+	bSizer41->Add(OnButton, 1, wxALL, 5);
 
-	AllOffButton = new wxButton(m_panel1, ControlElementId::AllOff, _("Turn off all"), wxDefaultPosition, wxDefaultSize, 0);
-	AllOffButton->Enable(false);
+	OffButton = new wxButton(m_panel1, ControlElementId::AllOff, _("Turn off"), wxDefaultPosition, wxDefaultSize, 0);
+	OffButton->Enable(false);
 
-	bSizer41->Add(AllOffButton, 1, wxALL, 5);
+	bSizer41->Add(OffButton, 1, wxALL, 5);
 
 
 	bSizer3->Add(bSizer41, 0, wxEXPAND, 5);
@@ -128,15 +128,15 @@ ModWindow::ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxW
 	Centre(wxBOTH);
 
 	ModListView->AppendToggleColumn(_("On/Off"), ModUIModel::Col_Check, wxDATAVIEW_CELL_ACTIVATABLE, 55);
-	ModListView->AppendTextColumn(_("Name"), ModUIModel::Col_Name, wxDATAVIEW_CELL_INERT, 200, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
+	ModListView->AppendTextColumn(_("Name"), ModUIModel::Col_Name, wxDATAVIEW_CELL_INERT, 270, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
 	ModListView->AppendTextColumn(_("Author"), ModUIModel::Col_Author, wxDATAVIEW_CELL_INERT, 100, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
-	ModListView->AppendTextColumn(_("File"), ModUIModel::Col_File, wxDATAVIEW_CELL_INERT, 100, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
+	ModListView->AppendTextColumn(_("File"), ModUIModel::Col_File, wxDATAVIEW_CELL_INERT, 130, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
 
 	// Connect Events
 	AddButton->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ModWindow::OnAddClicked), NULL, this);
 	RemoveButton->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ModWindow::OnRemoveClicked), NULL, this);
-	AllOnButton->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ModWindow::OnTurnOnAllClicked), NULL, this);
-	AllOffButton->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ModWindow::OnTurnOffAllClicked), NULL, this);
+	OnButton->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ModWindow::OnTurnOnClicked), NULL, this);
+	OffButton->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ModWindow::OnTurnOffClicked), NULL, this);
 	ChangeDirButton->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ModWindow::OnChangeDirClicked), NULL, this);
 	RestoreButton->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ModWindow::OnResetClicked), NULL, this);
 	MoreModsButton->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ModWindow::OnMoreModsClicked), NULL, this);
@@ -197,10 +197,17 @@ void ModWindow::OnAddClicked(wxCommandEvent& event)
 	{
 		return;
 	}
-
+	bool needsSave = false;
 	for (const wxString& path : result)
 	{
-		InstallMod(path.ToStdWstring());
+		if (InstallMod(path.ToStdWstring(), false))
+		{
+			needsSave = true;
+		}
+	}
+	if (needsSave)
+	{
+		CompositeMap.Save();
 	}
 
 	GetApp()->UpdateModsList(ModList);
@@ -217,7 +224,7 @@ void ModWindow::OnRemoveClicked(wxCommandEvent& event)
 	}
 	else if (selection.GetCount() == 1)
 	{
-		ModEntry& e = ModList[int(ModListView->GetCurrentItem().GetID()) - 1];
+		ModEntry& e = ModList[int(selection[0].GetID()) - 1];
 		wxString modName = e.Mod.ModName.size() ? e.Mod.ModName : (e.File + ".gpk");
 		if (wxMessageBox(wxString::Format(_("You are sure you want to delete the \"%s\" mod?"), modName.c_str()), _("Warning!"), wxICON_EXCLAMATION | wxYES_NO) != wxYES)
 		{
@@ -258,21 +265,33 @@ void ModWindow::OnRemoveClicked(wxCommandEvent& event)
 	wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
 }
 
-void ModWindow::OnTurnOnAllClicked(wxCommandEvent& event)
+void ModWindow::OnTurnOnClicked(wxCommandEvent& event)
 {
-	std::vector<bool> tmp;
-	for (auto& mod : ModList)
+	wxDataViewItemArray selection;
+	ModListView->GetSelections(selection);
+	if (!selection.GetCount())
 	{
-		tmp.push_back(mod.Enabled);
-		if (!mod.Enabled)
+		return;
+	}
+	std::vector<ModEntry*> items;
+	for (auto& item : selection)
+	{
+		items.push_back(&ModList[int(item.GetID()) - 1]);
+	}
+	std::vector<bool> tmp;
+	for (ModEntry* e : items)
+	{
+		tmp.push_back(e->Enabled);
+		if (!e->Enabled)
 		{
-			mod.Enabled = true;
-			if (!TurnOnMod(mod.Mod))
+			e->Enabled = true;
+			if (!TurnOnMod(e->Mod))
 			{
-				mod.Enabled = false;
+				e->Enabled = false;
 			}
 		}
 	}
+
 	try
 	{
 		CompositeMap.Save();
@@ -281,9 +300,11 @@ void ModWindow::OnTurnOnAllClicked(wxCommandEvent& event)
 	{
 		wxMessageBox(_("Failed to save the CompositePackageMapper.dat!"), _("Error!"), wxICON_ERROR);
 		CompositeMap.Reload();
-		for (int idx = 0; idx < ModList.size(); ++idx)
+		int idx = 0;
+		for (ModEntry* e : items)
 		{
-			ModList[idx].Enabled = tmp[idx];
+			e->Enabled = tmp[idx];
+			idx++;
 		}
 		return;
 	}
@@ -291,18 +312,33 @@ void ModWindow::OnTurnOnAllClicked(wxCommandEvent& event)
 	wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
 }
 
-void ModWindow::OnTurnOffAllClicked(wxCommandEvent& event)
+void ModWindow::OnTurnOffClicked(wxCommandEvent& event)
 {
-	std::vector<bool> tmp;
-	for (auto& mod : ModList)
+	wxDataViewItemArray selection;
+	ModListView->GetSelections(selection);
+	if (!selection.GetCount())
 	{
-		tmp.push_back(mod.Enabled);
-		if (mod.Enabled)
+		return;
+	}
+	std::vector<ModEntry*> items;
+	for (auto& item : selection)
+	{
+		items.push_back(&ModList[int(item.GetID()) - 1]);
+	}
+	std::vector<bool> tmp;
+	for (ModEntry* e : items)
+	{
+		tmp.push_back(e->Enabled);
+		if (e->Enabled)
 		{
-			mod.Enabled = false;
-			TurnOffMod(mod.Mod);
+			e->Enabled = false;
+			if (!TurnOffMod(e->Mod))
+			{
+				e->Enabled = true;
+			}
 		}
 	}
+
 	try
 	{
 		CompositeMap.Save();
@@ -311,12 +347,15 @@ void ModWindow::OnTurnOffAllClicked(wxCommandEvent& event)
 	{
 		wxMessageBox(_("Failed to save the CompositePackageMapper.dat!"), _("Error!"), wxICON_ERROR);
 		CompositeMap.Reload();
-		for (int idx = 0; idx < ModList.size(); ++idx)
+		int idx = 0;
+		for (ModEntry* e : items)
 		{
-			ModList[idx].Enabled = tmp[idx];
+			e->Enabled = tmp[idx];
+			idx++;
 		}
 		return;
 	}
+
 	GetApp()->UpdateModsList(ModList);
 	wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
 }
@@ -499,23 +538,23 @@ void ModWindow::OnIdle(wxIdleEvent& event)
 void ModWindow::OnRealoadModList(wxCommandEvent&)
 {
 	ModListView->AssociateModel(new ModUIModel(ModList, this));
-	AllOffButton->Enable(false);
-	AllOnButton->Enable(false);
+	OffButton->Enable(ModListView->HasSelection());
+	OnButton->Enable(ModListView->HasSelection());
 	RemoveButton->Enable(ModListView->HasSelection());
 	for (const auto& mod : ModList)
 	{
 		if (mod.Enabled)
 		{
-			AllOffButton->Enable(true);
-			if (AllOffButton->IsEnabled() && AllOnButton->IsEnabled())
+			OffButton->Enable(true);
+			if (OffButton->IsEnabled() && OnButton->IsEnabled())
 			{
 				break;
 			}
 		}
 		else
 		{
-			AllOnButton->Enable(true);
-			if (AllOffButton->IsEnabled() && AllOnButton->IsEnabled())
+			OnButton->Enable(true);
+			if (OffButton->IsEnabled() && OnButton->IsEnabled())
 			{
 				break;
 			}
@@ -525,10 +564,12 @@ void ModWindow::OnRealoadModList(wxCommandEvent&)
 
 void ModWindow::OnModSelectionChanged(wxDataViewEvent& event)
 {
+	OnButton->Enable(ModListView->HasSelection());
+	OffButton->Enable(ModListView->HasSelection());
 	RemoveButton->Enable(ModListView->HasSelection());
 }
 
-bool ModWindow::InstallMod(const std::wstring& path)
+bool ModWindow::InstallMod(const std::wstring& path, bool save)
 {
 	std::ifstream s(path, std::ios::binary | std::ios::in);
 	ModFile mod;
@@ -660,7 +701,10 @@ bool ModWindow::InstallMod(const std::wstring& path)
 	if (TurnOnMod(mod))
 	{
 		newMod.Enabled = true;
-		CompositeMap.Save();
+		if (save)
+		{
+			CompositeMap.Save();
+		}
 	}
 
 	newMod.File = mod.Container;

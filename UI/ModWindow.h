@@ -13,15 +13,15 @@ wxDECLARE_EVENT(RELOAD_MOD_LIST, wxCommandEvent);
 class ModWindow : public wxFrame, public ModListDelegate
 {
 public:
-	ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxWindowID id = wxID_ANY, const wxString& title = _("Tera Mod Manager"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize(721, 434), long style = wxCAPTION | wxCLOSE_BOX | wxSYSTEM_MENU | wxTAB_TRAVERSAL);
+	ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxWindowID id = wxID_ANY, const wxString& title = _("Tera Mod Manager"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize(821, 434), long style = wxCAPTION | wxCLOSE_BOX | wxSYSTEM_MENU | wxTAB_TRAVERSAL);
 
 	bool OnModStateChange(ModEntry& mod) override;
 
 protected:
 	void OnAddClicked(wxCommandEvent& event);
 	void OnRemoveClicked(wxCommandEvent& event);
-	void OnTurnOnAllClicked(wxCommandEvent& event);
-	void OnTurnOffAllClicked(wxCommandEvent& event);
+	void OnTurnOnClicked(wxCommandEvent& event);
+	void OnTurnOffClicked(wxCommandEvent& event);
 	void OnChangeDirClicked(wxCommandEvent& event);
 	void OnResetClicked(wxCommandEvent& event);
 	void OnMoreModsClicked(wxCommandEvent& event);
@@ -29,7 +29,7 @@ protected:
 	void OnRealoadModList(wxCommandEvent&);
 	void OnModSelectionChanged(wxDataViewEvent& event);
 
-	bool InstallMod(const std::wstring& path);
+	bool InstallMod(const std::wstring& path, bool save = true);
 	bool TurnOnMod(const ModFile& mod);
 	bool TurnOffMod(const ModFile& mod, bool silent = false);
 
@@ -37,8 +37,8 @@ private:
 	wxDataViewCtrl* ModListView = nullptr;
 	wxButton* AddButton = nullptr;
 	wxButton* RemoveButton = nullptr;
-	wxButton* AllOnButton = nullptr;
-	wxButton* AllOffButton = nullptr;
+	wxButton* OnButton = nullptr;
+	wxButton* OffButton = nullptr;
 	wxButton* ChangeDirButton = nullptr;
 	wxButton* RestoreButton = nullptr;
 	wxButton* MoreModsButton = nullptr;
