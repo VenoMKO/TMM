@@ -453,9 +453,9 @@ void ModWindow::OnIdle(wxIdleEvent& event)
 		CompositeMap = CompositeMapperFile(GetApp()->GetCompositeMapperPath().wstring());
 		if (!CompositeMap.IsMarked())
 		{
+			GetApp()->BackupCompositeMapperFile();
 			CompositeMap.Mark();
 			CompositeMap.Save();
-			GetApp()->BackupCompositeMapperFile();
 			teraUpdated = true;
 		}
 		if (!std::filesystem::exists(GetApp()->GetBackupCompositeMapperPath()))
