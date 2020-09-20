@@ -8,6 +8,13 @@
 
 You can get the latest version in the ['Releases' section](https://github.com/VenoMKO/TMM/releases).
 
+### Installation
+
+1. Download and extract the TMM.
+2. Start the TMM.exe.
+3. Specify your game folder(e.g. D:\Games\Gameforge\tera\Client\S1Game).
+4. Click Add to install a composite mod.
+
 ### Contacts
 
 You can contact me on [Tumblr](https://yupimods.tumblr.com/).
