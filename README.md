@@ -1,4 +1,4 @@
-## TMM
+## TMM (Tera Mod Manager)
 > Tera Online 64-bit composite GPK mod manager. Allows you to install and manage composite GPK mods without manual CompositePackageMapper.dat patching.
 > Supports mods created by [Real Editor](https://github.com/VenoMKO/RealEditor) version 1.0 and heigher.
 
