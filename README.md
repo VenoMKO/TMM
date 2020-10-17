@@ -18,6 +18,8 @@ You can get the latest version in the ['Releases' section](https://github.com/Ve
 
 To install a composite mod click the Add button and select a GPK mod.
 TMM will copy the GPK to your CookedPC folder and patch the CompositePackageMapper.dat so the game will load a modded GPK instead of and original one.
+> After adding mods you can close the TMM. You don't need to start it every time you want to play Tera.
+
 > **Notice:** TMM is necessery only for composite mods. Simple mods like `TexturedFonts.gpk` can be installed the old way by copying the GPK to `_Mods` folder.
 ### Wiki
 
