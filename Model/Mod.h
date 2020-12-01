@@ -3,6 +3,10 @@
 #include <fstream>
 #include <vector>
 
+#define VER_TERA_FILEMOD 2
+
+std::string GetString(std::ifstream& s);
+
 // Struct represents a composite GPK file
 struct ModFile {
   struct CompositePackage {
@@ -20,13 +24,23 @@ struct ModFile {
     unsigned short LicenseeVersion = 0;
   };
 
+  struct TfcPackage {
+    friend std::ifstream& operator>>(std::ifstream& s, TfcPackage& p);
+    int Offset = 0;
+    int Size = 0;
+    int Idx = 0;
+    int IdxOffset = 0;
+  };
+
   friend std::ifstream& operator>>(std::ifstream& s, ModFile& m);
 
   bool RegionLock = false;
+  int ModFileVersion = 1;
   std::string ModName;
   std::string Container;
   std::string ModAuthor;
   std::vector<CompositePackage> Packages;
+  std::vector<TfcPackage> TfcPackages;
 };
 
 // A mod entry serialized from a config file or created when a mod is added

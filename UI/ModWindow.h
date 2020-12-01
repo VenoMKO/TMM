@@ -32,6 +32,7 @@ protected:
 	bool InstallMod(const std::wstring& path, bool save = true);
 	bool TurnOnMod(const ModFile& mod);
 	bool TurnOffMod(const ModFile& mod, bool silent = false);
+	int GetAvailableTfcIndex();
 
 private:
 	wxDataViewCtrl* ModListView = nullptr;

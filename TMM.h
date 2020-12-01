@@ -7,7 +7,7 @@
 #include "Model/Mod.h"
 
 #define APP_VER_MAJOR 1
-#define APP_VER_MINOR 0
+#define APP_VER_MINOR 1
 
 class TMM : public wxApp {
 public:

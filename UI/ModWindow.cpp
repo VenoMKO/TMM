@@ -7,8 +7,19 @@
 #include <wx/filename.h>
 #include <fstream>
 
+#include <filesystem>
+
 const char* MoreModsLink = "https://www.tumblr.com/tagged/tera+mods";
 const char* UpdateLink = "https://github.com/VenoMKO/TMM/releases";
+
+wxString TfcName(int idx, bool extension)
+{
+	if (extension)
+	{
+		return wxString::Format("WorldTextures%03d.tfc", idx);
+	}
+	return wxString::Format("WorldTextures%03d", idx);
+}
 
 enum ControlElementId
 {
@@ -258,6 +269,12 @@ void ModWindow::OnRemoveClicked(wxCommandEvent& event)
 			wxMessageBox(_("Failed to delete the ") + e.File + ".gpk!", _("Error!"), wxICON_ERROR);
 			continue;
 		}
+
+		for (auto const& tfc : e.Mod.TfcPackages)
+		{
+			std::filesystem::remove(GetApp()->GetModsDir() / TfcName(tfc.Idx, true).ToStdWstring(), err);
+		}
+
 		ModList.erase(std::remove(ModList.begin(), ModList.end(), e), ModList.end());
 	}
 	
@@ -571,9 +588,11 @@ void ModWindow::OnModSelectionChanged(wxDataViewEvent& event)
 
 bool ModWindow::InstallMod(const std::wstring& path, bool save)
 {
-	std::ifstream s(path, std::ios::binary | std::ios::in);
 	ModFile mod;
-	s >> mod;
+	{
+		std::ifstream s(path, std::ios::binary | std::ios::in);
+		s >> mod;
+	}
 	if (mod.Packages.empty())
 	{
 		std::filesystem::path item(path);
@@ -634,6 +653,14 @@ bool ModWindow::InstallMod(const std::wstring& path, bool save)
 		return false;
 	}
 
+	if (mod.ModFileVersion > VER_TERA_FILEMOD)
+	{
+		wxMessageBox(_("The mod is designed for a newer version of the TMM. It may not work correctly!"), _("Warning!"), wxICON_WARNING);
+	}
+
+	
+	
+
 	std::filesystem::path source(path);
 	std::filesystem::path dest = GetApp()->GetModsDir() / (mod.Container + ".gpk");
 
@@ -673,7 +700,7 @@ bool ModWindow::InstallMod(const std::wstring& path, bool save)
 		}
 	}
 
-	// Copy the mod file unless in is already in the mod dir
+	// Copy the mod file unless it is already in the mod dir
 	if (source != dest)
 	{
 		std::error_code err;
@@ -694,7 +721,46 @@ bool ModWindow::InstallMod(const std::wstring& path, bool save)
 
 	if (entryToDelete >= 0)
 	{
+		const auto& tfcs = ModList[entryToDelete].Mod.TfcPackages;
+		std::error_code err;
+		for (auto const& tfc : tfcs)
+		{
+			std::filesystem::remove(GetApp()->GetModsDir() / TfcName(tfc.Idx, true).ToStdWstring(), err);
+		}
 		ModList.erase(ModList.begin() + entryToDelete);
+	}
+
+	std::vector<std::filesystem::path> installedTfcs;
+	std::vector<std::pair<ModFile::TfcPackage*, int>> installedTfcsMap;
+	for (auto& tfc : mod.TfcPackages)
+	{
+		if (!tfc.Size)
+		{
+			continue;
+		}
+		if (int idx = GetAvailableTfcIndex())
+		{
+			std::filesystem::path destPath = GetApp()->GetModsDir() / TfcName(idx, true).ToStdWstring();
+			std::ifstream s(path, std::ios::binary | std::ios::in);
+			s.seekg(tfc.Offset);
+			char* data = (char*)malloc(tfc.Size);
+			s.read(data, tfc.Size);
+			std::ofstream w(destPath, std::ios::binary);
+			w.write(data, tfc.Size);
+			free(data);
+			installedTfcsMap.push_back({ &tfc, idx });
+			installedTfcs.push_back(destPath);
+		}
+		else
+		{
+			std::error_code err;
+			for (const auto& installedPath : installedTfcs)
+			{
+				std::filesystem::remove(installedPath, err);
+			}
+			wxMessageBox(_("Failed to add texture file cache!"), _("Error!"), wxICON_ERROR);
+			return false;
+		}
 	}
 
 	ModEntry newMod;
@@ -706,6 +772,86 @@ bool ModWindow::InstallMod(const std::wstring& path, bool save)
 			CompositeMap.Save();
 		}
 	}
+
+	// Patch tfc names
+	if (installedTfcs.size())
+	{
+		char* writeBuffer = nullptr;
+		int writeBufferSize = 0;
+
+		std::ifstream readStream(dest, std::ios::binary);
+		readStream.seekg(0, std::ios::end);
+		writeBufferSize = readStream.tellg();
+
+		readStream.seekg(std::ios::beg);
+		writeBuffer = (char*)malloc(writeBufferSize);
+		readStream.read(writeBuffer, writeBufferSize);
+		readStream.seekg(0, std::ios::beg);
+		
+		for (int idx = 0; idx < installedTfcs.size(); ++idx)
+		{
+			ModFile::TfcPackage* tfc = installedTfcsMap[idx].first;
+			const int newTfcIndex = installedTfcsMap[idx].second;
+			const std::string originalTfcName = TfcName(tfc->Idx, false).ToStdString();
+			const std::wstring newTfcName = installedTfcs[idx].filename().wstring();
+			tfc->Idx = newTfcIndex;
+
+			// Modify tfc index in the metadata
+			memcpy(writeBuffer + tfc->IdxOffset, &newTfcIndex, sizeof(newTfcIndex));
+
+			for (const auto& package : mod.Packages)
+			{
+				// seek to the package folder name
+				readStream.seekg(package.Offset + 12);
+				int tmp = 0;
+				// read the string length
+				readStream.read((char*)&tmp, sizeof(tmp));
+				if (tmp < 0)
+				{
+					tmp *= -2;
+				}
+				// seek to the names table info
+				readStream.seekg(package.Offset + 12 + sizeof(tmp) + tmp + 4);
+
+				int namesCount = 0;
+				readStream.read((char*)&namesCount, sizeof(namesCount));
+				int namesOffset = 0;
+				readStream.read((char*)&namesOffset, sizeof(namesOffset));
+
+				// seek to the name table
+				readStream.seekg(package.Offset + namesOffset);
+				// find and change tfc name entry
+				for (int nameIndex = 0; nameIndex < namesCount; ++nameIndex)
+				{
+					namesOffset = readStream.tellg();
+					int len = 0;
+					readStream.read((char*)&len, sizeof(len));
+					readStream.seekg(namesOffset);
+					std::string name = GetString(readStream);
+					if (name == originalTfcName)
+					{
+						if (len < 0)
+						{
+							memcpy(writeBuffer + namesOffset + 4, (char*)newTfcName.c_str(), std::min(name.size(), newTfcName.size()) * 2);
+						}
+						else
+						{
+							memcpy(writeBuffer + namesOffset + 4, W2A(newTfcName).c_str(), std::min(name.size(), newTfcName.size()));
+						}
+						break;
+					}
+					readStream.seekg(int(readStream.tellg()) + 8);
+				}
+			}
+		}
+
+		readStream.close();
+
+		std::ofstream writeStream(dest, std::ios::binary | std::ios::trunc);
+		writeStream.write(writeBuffer, writeBufferSize);
+		free(writeBuffer);
+	}
+	
 
 	newMod.File = mod.Container;
 	newMod.Mod = mod;
@@ -756,7 +902,6 @@ bool ModWindow::TurnOnMod(const ModFile& mod)
 				return false;
 			}
 		}
-		
 	}
 
 	for (const auto& package : mod.Packages)
@@ -798,6 +943,19 @@ bool ModWindow::TurnOffMod(const ModFile& mod, bool silent)
 		CompositeMap.AddEntry(entry);
 	}
 	return true;
+}
+
+int ModWindow::GetAvailableTfcIndex()
+{
+	std::filesystem::path root = GetApp()->GetModsDir();
+	for (int idx = 899; idx > 100; --idx)
+	{
+		if (!std::filesystem::exists(root / TfcName(idx, true).ToStdWstring()))
+		{
+			return idx;
+		}
+	}
+	return 0;
 }
 
 wxBEGIN_EVENT_TABLE(ModWindow, wxFrame)

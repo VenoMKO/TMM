@@ -1,7 +1,7 @@
 #include "Mod.h"
 #include "../Utils.h"
 
-#define PACKAGE_MAIGC 0x9E2A83C1
+#define PACKAGE_MAGIC 0x9E2A83C1
 #define MAX_STRLEN 1024
 
 const char* ModPrefix = "MOD:";
@@ -61,7 +61,7 @@ std::ifstream& operator>>(std::ifstream& s, ModFile& m)
   unsigned int magic = 0;
   s.read((char*)&magic, sizeof(magic));
 
-  if (magic == PACKAGE_MAIGC)
+  if (magic == PACKAGE_MAGIC)
   {
     // Package has metadata
     pos -= sizeof(int);
@@ -100,6 +100,47 @@ std::ifstream& operator>>(std::ifstream& s, ModFile& m)
     s.read((char*)&regionLock, sizeof(regionLock));
     m.RegionLock = regionLock;
 
+    pos -= sizeof(int);
+    int version = 0;
+    s.seekg(pos);
+    s.read((char*)&version, sizeof(version));
+
+    int compositeEnd = 0;
+    if (version != PACKAGE_MAGIC)
+    {
+      m.ModFileVersion = version;
+
+      pos -= sizeof(int);
+      s.seekg(pos);
+      s.read((char*)&compositeEnd, sizeof(compositeEnd));
+
+      int tfcOffsetsCount = 0;
+      pos -= sizeof(int);
+      s.seekg(pos);
+      s.read((char*)&tfcOffsetsCount, sizeof(tfcOffsetsCount));
+
+      int tfcOffsetsOffset = 0;
+      pos -= sizeof(int);
+      s.seekg(pos);
+      s.read((char*)&tfcOffsetsOffset, sizeof(tfcOffsetsOffset));
+
+      int tfcEnd = 0;
+      pos -= sizeof(int);
+      s.seekg(pos);
+      s.read((char*)&tfcEnd, sizeof(tfcEnd));
+
+      if (tfcOffsetsOffset && tfcOffsetsCount)
+      {
+        s.seekg(tfcOffsetsOffset);
+        for (int idx = 0; idx < tfcOffsetsCount; ++idx)
+        {
+          ModFile::TfcPackage tfc;
+          s >> tfc;
+          m.TfcPackages.push_back(tfc);
+        }
+      }
+    }
+
     s.seekg(authorOffset);
     m.ModAuthor = GetString(s);
     s.seekg(nameOffset);
@@ -123,7 +164,7 @@ std::ifstream& operator>>(std::ifstream& s, ModFile& m)
       }
       s >> m.Packages[idx];
     }
-    m.Packages.back().Size = (end - metaSize) - m.Packages.back().Offset;
+    m.Packages.back().Size = (compositeEnd ? compositeEnd : (end - metaSize)) - m.Packages.back().Offset;
   }
   else
   {
@@ -177,5 +218,14 @@ std::ifstream& operator>>(std::ifstream& s, ModFile::CompositePackage& p)
   {
     p.ObjectPath = folderName.substr(strlen(ModPrefix));
   }
+  return s;
+}
+
+std::ifstream& operator>>(std::ifstream& s, ModFile::TfcPackage& p)
+{
+  s.read((char*)&p.Offset, sizeof(p.Offset));
+  s.read((char*)&p.Size, sizeof(p.Size));
+  p.IdxOffset = s.tellg();
+  s.read((char*)&p.Idx, sizeof(p.Idx));
   return s;
 }
