@@ -6,6 +6,8 @@
 
 bool IncompletePathsEqual(const std::string& a, const std::string& b);
 
+bool IsTeraRunning(bool& error);
+
 // Wide string to UTF8
 std::string W2A(const wchar_t* str, int len = -1);
 std::string W2A(const std::wstring& str);

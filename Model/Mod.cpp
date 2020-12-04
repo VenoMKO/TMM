@@ -203,6 +203,9 @@ std::ofstream& operator<<(std::ofstream& s, GameConfigFile& cfg)
     s.write((char*)&enabled, sizeof(enabled));
     SetString(s, cfg.Mods[idx].File);
   }
+  int tmp = PACKAGE_MAGIC;
+  s.write((char*)&tmp, sizeof(tmp));
+  tmp = PACKAGE_MAGIC;
   return s;
 }
 

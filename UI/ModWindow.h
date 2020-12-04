@@ -28,11 +28,17 @@ protected:
 	void OnIdle(wxIdleEvent& event);
 	void OnRealoadModList(wxCommandEvent&);
 	void OnModSelectionChanged(wxDataViewEvent& event);
+	void OnWaitForTeraChanged(wxCommandEvent&);
 
 	bool InstallMod(const std::wstring& path, bool save = true);
 	bool TurnOnMod(const ModFile& mod);
 	bool TurnOffMod(const ModFile& mod, bool silent = false);
 	int GetAvailableTfcIndex();
+
+	void StartWaiting(bool value);
+	void CheckTera(wxTimerEvent&);
+	void OnTeraLaunched();
+	void OnTeraClosed();
 
 private:
 	wxDataViewCtrl* ModListView = nullptr;
@@ -44,7 +50,11 @@ private:
 	wxButton* RestoreButton = nullptr;
 	wxButton* MoreModsButton = nullptr;
 	wxHyperlinkCtrl* GitHubLink = nullptr;
-	wxGauge* ProgressBar = nullptr;
+	wxCheckBox* WaitTeraCheckbox = nullptr;
+
+	bool TeraRunning = false;
+	bool RestoreMap = false;
+	wxTimer TeraTimer;
 
 	std::vector<ModEntry> ModList;
 	CompositeMapperFile CompositeMap;

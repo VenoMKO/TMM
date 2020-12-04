@@ -101,6 +101,7 @@ CompositeMapperFile::CompositeMapperFile(const std::wstring& source)
 
 void CompositeMapperFile::Reload()
 {
+  CachedMap.clear();
   std::string decrypted;
   try
   {
@@ -114,11 +115,19 @@ void CompositeMapperFile::Reload()
   }
 }
 
-void CompositeMapperFile::Save()
+void CompositeMapperFile::Cache()
 {
-  std::string newMapper;
-  SerializeCompositeMapToString(newMapper);
-  EncryptMapper(SourcePath, newMapper);
+  CachedMap.clear();
+  SerializeCompositeMapToString(CachedMap);
+}
+
+void CompositeMapperFile::Save(const std::wstring& dest)
+{
+  if (CachedMap.empty())
+  {
+    SerializeCompositeMapToString(CachedMap);
+  }
+  EncryptMapper(dest.empty() ? SourcePath : dest, CachedMap);
 }
 
 bool CompositeMapperFile::IsMarked() const
@@ -130,6 +139,7 @@ void CompositeMapperFile::Mark(bool flag)
 {
   if (flag)
   {
+    CachedMap.clear();
     CompositeMap[Marker].CompositeName = Marker;
     CompositeMap[Marker].Filename = Marker;
     CompositeMap[Marker].ObjectPath = Marker;
@@ -138,6 +148,7 @@ void CompositeMapperFile::Mark(bool flag)
   {
     if (CompositeMap.count(Marker))
     {
+      CachedMap.clear();
       CompositeMap.erase(Marker);
     }
   }
@@ -149,6 +160,7 @@ bool CompositeMapperFile::GetEntryByCompositeName(const std::string& compositeNa
   {
     return false;
   }
+  CachedMap.clear();
   output = CompositeMap[compositeName];
   return true;
 }
@@ -161,6 +173,7 @@ bool CompositeMapperFile::GetEntryByIncompleteObjectPath(const std::string& inco
     if (IncompletePathsEqual(ToUpper(pair.second.ObjectPath), incompletePathUpper))
     {
       output = pair.second;
+      CachedMap.clear();
       return true;
     }
   }
@@ -176,6 +189,7 @@ bool CompositeMapperFile::GetEntryByObjectPath(const std::string& path, Composit
     if (testPath == pathUpper)
     {
       output = pair.second;
+      CachedMap.clear();
       return true;
     }
   }
@@ -186,6 +200,7 @@ bool CompositeMapperFile::AddEntry(const CompositeEntry& entry)
 {
   bool exists = CompositeMap.count(entry.CompositeName);
   CompositeMap[entry.CompositeName] = entry;
+  CachedMap.clear();
   return exists;
 }
 
@@ -194,6 +209,7 @@ bool CompositeMapperFile::RemoveEntry(const CompositeEntry& entry)
   if (CompositeMap.count(entry.CompositeName))
   {
     CompositeMap.erase(entry.CompositeName);
+    CachedMap.clear();
     return true;
   }
   return false;

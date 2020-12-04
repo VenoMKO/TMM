@@ -21,8 +21,8 @@ public:
   CompositeMapperFile(const std::wstring& source);
 
   void Reload();
-
-  void Save();
+  void Cache();
+  void Save(const std::wstring& dest = {});
 
   // Check if we'v ever marked this file
   bool IsMarked() const;
@@ -49,4 +49,5 @@ private:
   std::wstring SourcePath;
   size_t SourceSize = 0;
   std::map<std::string, CompositeEntry> CompositeMap;
+  std::string CachedMap;
 };

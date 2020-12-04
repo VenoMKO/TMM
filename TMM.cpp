@@ -13,6 +13,7 @@ wxIMPLEMENT_APP(TMM);
 
 const char* ConfigFile = "Settings.ini";
 const char* ConfigFileRootKey = "RootDir";
+const char* ConfigFileWaitForTeraKey = "WaitForTera";
 
 const char* GameConfigFilePath = "ModList.tmm";
 
@@ -41,6 +42,7 @@ void TMM::LoadAppConfig()
   cfg.SetPath(path);
 
   RootDir = cfg.Read(ConfigFileRootKey, wxEmptyString).ToStdWstring();
+  WaitForTera = cfg.ReadBool(ConfigFileWaitForTeraKey, false);
 }
 
 void TMM::SaveAppConfig()
@@ -51,6 +53,7 @@ void TMM::SaveAppConfig()
 
   wxString tmpPath = RootDir.wstring();
   cfg.Write(ConfigFileRootKey, tmpPath);
+  cfg.Write(ConfigFileWaitForTeraKey, WaitForTera);
 }
 
 void TMM::LoadGameConfig()

@@ -114,9 +114,9 @@ ModWindow::ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxW
 	m_panel2 = new wxPanel(m_panel1, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
 	bSizer3->Add(m_panel2, 1, wxEXPAND | wxALL, 5);
 
-	ProgressBar = new wxGauge(m_panel1, wxID_ANY, 100, wxDefaultPosition, wxDefaultSize, wxGA_HORIZONTAL);
-	ProgressBar->SetValue(-1);
-	bSizer3->Add(ProgressBar, 0, wxALL, 5);
+	WaitTeraCheckbox = new wxCheckBox(m_panel1, wxID_ANY, _("Wait for Tera to start"), wxDefaultPosition, wxDefaultSize, 0);
+	WaitTeraCheckbox->SetValue(GetApp()->GetWaitForTera());
+	bSizer3->Add(WaitTeraCheckbox, 0, wxALL, 5);
 
 
 	m_panel1->SetSizer(bSizer3);
@@ -140,6 +140,8 @@ ModWindow::ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxW
 
 	Centre(wxBOTH);
 
+	WaitTeraCheckbox->SetToolTip(_("Usefull for KR/TW Tera. Allows to skip launcher's integrity check."));
+
 	ModListView->AppendToggleColumn(_("On/Off"), ModUIModel::Col_Check, wxDATAVIEW_CELL_ACTIVATABLE, 55);
 	ModListView->AppendTextColumn(_("Name"), ModUIModel::Col_Name, wxDATAVIEW_CELL_INERT, 270, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
 	ModListView->AppendTextColumn(_("Author"), ModUIModel::Col_Author, wxDATAVIEW_CELL_INERT, 100, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
@@ -153,8 +155,9 @@ ModWindow::ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxW
 	ChangeDirButton->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ModWindow::OnChangeDirClicked), NULL, this);
 	RestoreButton->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ModWindow::OnResetClicked), NULL, this);
 	MoreModsButton->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ModWindow::OnMoreModsClicked), NULL, this);
+	WaitTeraCheckbox->Connect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ModWindow::OnWaitForTeraChanged), NULL, this);
 	Connect(wxEVT_IDLE, wxIdleEventHandler(ModWindow::OnIdle), NULL, this);
-	ProgressBar->Show(false);
+	TeraTimer.Bind(wxEVT_TIMER, &ModWindow::CheckTera, this);
 }
 
 bool ModWindow::OnModStateChange(ModEntry& mod)
@@ -180,7 +183,14 @@ bool ModWindow::OnModStateChange(ModEntry& mod)
 	{
 		try
 		{
-			CompositeMap.Save();
+			if (WaitTeraCheckbox->GetValue())
+			{
+				CompositeMap.Cache();
+			}
+			else
+			{
+				CompositeMap.Save();
+			}
 		}
 		catch (...)
 		{
@@ -239,7 +249,14 @@ void ModWindow::OnAddClicked(wxCommandEvent& event)
 
 	if (needsSave)
 	{
-		CompositeMap.Save();
+		if (WaitTeraCheckbox->GetValue())
+		{
+			CompositeMap.Cache();
+		}
+		else
+		{
+			CompositeMap.Save();
+		}
 	}
 
 	GetApp()->UpdateModsList(ModList);
@@ -351,7 +368,14 @@ void ModWindow::OnTurnOnClicked(wxCommandEvent& event)
 
 	try
 	{
-		CompositeMap.Save();
+		if (WaitTeraCheckbox->GetValue())
+		{
+			CompositeMap.Cache();
+		}
+		else
+		{
+			CompositeMap.Save();
+		}
 	}
 	catch (...)
 	{
@@ -404,7 +428,14 @@ void ModWindow::OnTurnOffClicked(wxCommandEvent& event)
 
 		try
 		{
-			CompositeMap.Save();
+			if (WaitTeraCheckbox->GetValue())
+			{
+				CompositeMap.Cache();
+			}
+			else
+			{
+				CompositeMap.Save();
+			}
 		}
 		catch (...)
 		{
@@ -504,6 +535,12 @@ void ModWindow::OnIdle(wxIdleEvent& event)
 	progress.SetActionText(wxT("Loading..."));
 	progress.SetProgress(-1);
 
+	enum Codes {
+		OK,
+		QUIT,
+		CLOSE
+	};
+
 	std::thread([&]{
 		std::vector<ModEntry> missing;
 		for (ModEntry& entry : ModList)
@@ -531,9 +568,12 @@ void ModWindow::OnIdle(wxIdleEvent& event)
 			if (!CompositeMap.IsMarked())
 			{
 				GetApp()->BackupCompositeMapperFile();
-				CompositeMap.Mark();
-				CompositeMap.Save();
-				teraUpdated = true;
+				if (!WaitTeraCheckbox->GetValue())
+				{
+					CompositeMap.Mark();
+					CompositeMap.Save();
+					teraUpdated = true;
+				}				
 			}
 			if (!std::filesystem::exists(GetApp()->GetBackupCompositeMapperPath()))
 			{
@@ -548,7 +588,7 @@ void ModWindow::OnIdle(wxIdleEvent& event)
 					msg += _(", otherwise delete the CompositePackageMapper.dat and repair your client!");
 					wxMessageBox(msg, _("Error!"), wxICON_ERROR);
 				}
-				GetApp()->ExitMainLoop();
+				progress.Close(Codes::QUIT);
 				return;
 			}
 			BackupMap = CompositeMapperFile(GetApp()->GetBackupCompositeMapperPath().wstring());
@@ -556,8 +596,8 @@ void ModWindow::OnIdle(wxIdleEvent& event)
 		catch (...)
 		{
 			wxMessageBox(_("Failed to load the CompositePackageMapper.dat"), _("Error!"), wxICON_ERROR);
-			GetApp()->ChangeRootDir({});
-			Close();
+			progress.Close(Codes::QUIT);
+			return;
 		}
 
 		
@@ -602,18 +642,37 @@ void ModWindow::OnIdle(wxIdleEvent& event)
 				entry.Enabled = false;
 			}
 		}
-
-		CompositeMap.Save();
-		progress.Close(wxID_OK);
+		if (WaitTeraCheckbox->GetValue())
+		{
+			CompositeMap.Cache();
+		}
+		else
+		{
+			CompositeMap.Save();
+		}
+		progress.Close(Codes::OK);
 
 	}).detach();
 	
-	progress.ShowModal();
+	switch (progress.ShowModal())
+	{
+	case Codes::QUIT:
+		GetApp()->ExitMainLoop();
+		return;
+	case Codes::CLOSE:
+		GetApp()->ChangeRootDir({});
+		Close();
+		return;
+	case Codes::OK:
+		break;
+	}
 
 	if (saveList)
 	{
 		GetApp()->UpdateModsList(ModList);
 	}
+
+	StartWaiting(WaitTeraCheckbox->GetValue());
 
 	wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
 }
@@ -650,6 +709,60 @@ void ModWindow::OnModSelectionChanged(wxDataViewEvent& event)
 	OnButton->Enable(ModListView->HasSelection());
 	OffButton->Enable(ModListView->HasSelection());
 	RemoveButton->Enable(ModListView->HasSelection());
+}
+
+void ModWindow::OnWaitForTeraChanged(wxCommandEvent&)
+{
+	bool value = WaitTeraCheckbox->GetValue();
+	GetApp()->SetWaitForTera(value);
+	StartWaiting(value);
+
+	if (!value)
+	{
+		// Apply modded DAT
+		CompositeMap.Save();
+	}
+}
+
+void ModWindow::StartWaiting(bool value)
+{
+	bool err = false;
+	TeraRunning = IsTeraRunning(err);
+	if (value)
+	{
+		TeraTimer.Start(500);
+	}
+	else
+	{
+		TeraTimer.Stop();
+	}
+}
+
+void ModWindow::CheckTera(wxTimerEvent&)
+{
+	bool err = false;
+	bool teraRunning = IsTeraRunning(err);
+	
+	if (err)
+	{
+		TeraTimer.Stop();
+		wxMessageBox(_("Failed to check if TERA.exe is running!"), _("Error!"), wxICON_ERROR);
+		return;
+	}
+
+	if (TeraRunning != teraRunning)
+	{
+		if (teraRunning)
+		{
+			OnTeraLaunched();
+		}
+		else
+		{
+			OnTeraClosed();
+		}
+	}
+
+	TeraRunning = teraRunning;
 }
 
 bool ModWindow::InstallMod(const std::wstring& path, bool save)
@@ -832,7 +945,14 @@ bool ModWindow::InstallMod(const std::wstring& path, bool save)
 		newMod.Enabled = true;
 		if (save)
 		{
-			CompositeMap.Save();
+			if (WaitTeraCheckbox->GetValue())
+			{
+				CompositeMap.Cache();
+			}
+			else
+			{
+				CompositeMap.Save();
+			}
 		}
 	}
 
@@ -1019,6 +1139,21 @@ int ModWindow::GetAvailableTfcIndex()
 		}
 	}
 	return 0;
+}
+
+void ModWindow::OnTeraLaunched()
+{
+	CompositeMap.Save();
+	RestoreMap = true;
+}
+
+void ModWindow::OnTeraClosed()
+{
+	if (RestoreMap)
+	{
+		RestoreMap = false;
+		BackupMap.Save(GetApp()->GetCompositeMapperPath());
+	}
 }
 
 wxBEGIN_EVENT_TABLE(ModWindow, wxFrame)

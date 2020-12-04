@@ -7,7 +7,7 @@
 #include "Model/Mod.h"
 
 #define APP_VER_MAJOR 1
-#define APP_VER_MINOR 11
+#define APP_VER_MINOR 20
 
 class TMM : public wxApp {
 public:
@@ -47,6 +47,17 @@ public:
     return GameConfigPath;
   }
 
+  inline bool GetWaitForTera() const
+  {
+    return WaitForTera;
+  }
+
+  inline void SetWaitForTera(bool flag)
+  {
+    WaitForTera = flag;
+    SaveAppConfig();
+  }
+
 protected:
   int OnRun() override;
 
@@ -54,10 +65,11 @@ protected:
 
 private:
   std::filesystem::path RootDir; // S1Game
-  std::filesystem::path ModsDir; // S1Game/_CookedPC
+  std::filesystem::path ModsDir; // S1Game/CookedPC
   std::filesystem::path CompositeMapperPath; // S1Game/CookedPC/CompositePackageMapper.dat
-  std::filesystem::path BackupCompositeMapperPath; // S1Game/_CookedPC/CompositePackageMapper.backup
-  std::filesystem::path GameConfigPath; // S1Game/_CookedPC/Config.tmm
+  std::filesystem::path BackupCompositeMapperPath; // S1Game/CookedPC/CompositePackageMapper.clean
+  std::filesystem::path GameConfigPath; // S1Game/CookedPC/Config.tmm
+  bool WaitForTera = false;
 
   GameConfigFile GameConfig;
 };
