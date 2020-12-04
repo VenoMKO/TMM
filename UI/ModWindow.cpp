@@ -2,12 +2,14 @@
 #include "RootDirWindow.h"
 #include "../Utils.h"
 #include "../TMM.h"
+#include "ProgressWindow.h"
 
 #include <wx/statline.h>
 #include <wx/filename.h>
 #include <fstream>
 
 #include <filesystem>
+#include <thread>
 
 const char* MoreModsLink = "https://www.tumblr.com/tagged/tera+mods";
 const char* UpdateLink = "https://github.com/VenoMKO/TMM/releases";
@@ -158,14 +160,21 @@ ModWindow::ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxW
 bool ModWindow::OnModStateChange(ModEntry& mod)
 {
 	bool ok = false;
-	if (mod.Enabled)
-	{
-		ok = TurnOnMod(mod.Mod);
-	}
-	else
-	{
-		ok = TurnOffMod(mod.Mod);
-	}
+	ProgressWindow progress(this, (mod.Enabled ? wxT("Enabling: ") : wxT("Disabling: ")) + mod.File);
+	progress.SetProgress(ProgressWindow::PW_IndeterminateProgress);
+	std::thread([&] {
+		if (mod.Enabled)
+		{
+			ok = TurnOnMod(mod.Mod);
+		}
+		else
+		{
+			ok = TurnOffMod(mod.Mod);
+		}
+		progress.Close(wxID_OK);
+	}).detach();
+	
+	progress.ShowModal();
 
 	if (ok)
 	{
@@ -209,13 +218,25 @@ void ModWindow::OnAddClicked(wxCommandEvent& event)
 		return;
 	}
 	bool needsSave = false;
-	for (const wxString& path : result)
-	{
-		if (InstallMod(path.ToStdWstring(), false))
+	ProgressWindow progress(this);
+	progress.SetProgress(ProgressWindow::PW_IndeterminateProgress);
+	std::thread([&] {
+		for (const wxString& path : result)
 		{
-			needsSave = true;
+			wxString extension;
+			wxString name;
+			wxFileName::SplitPath(path, nullptr, nullptr, &name, &extension);
+			progress.SetActionText(wxT("Installing: ") + name + wxT(".") + extension);
+			if (InstallMod(path.ToStdWstring(), false))
+			{
+				needsSave = true;
+			}
 		}
-	}
+		progress.Close(wxID_OK);
+	}).detach();
+	
+	progress.ShowModal();
+
 	if (needsSave)
 	{
 		CompositeMap.Save();
@@ -255,29 +276,39 @@ void ModWindow::OnRemoveClicked(wxCommandEvent& event)
 	{
 		itemsToRemove.push_back(ModList[int(item.GetID()) - 1]);
 	}
-	for (ModEntry& e : itemsToRemove)
-	{
-		wxString modName = e.Mod.ModName.size() ? e.Mod.ModName : (e.File + ".gpk");
-		if (e.Enabled && !TurnOffMod(e.Mod))
-		{
-			continue;
-		}
 
-		std::error_code err;
-		if (std::filesystem::exists(GetApp()->GetModsDir() / (e.File + ".gpk")) && !std::filesystem::remove(GetApp()->GetModsDir() / (e.File + ".gpk"), err))
+	ProgressWindow progress(this);
+	progress.SetProgress(ProgressWindow::PW_IndeterminateProgress);
+	std::thread([&] {
+		for (ModEntry& e : itemsToRemove)
 		{
-			wxMessageBox(_("Failed to delete the ") + e.File + ".gpk!", _("Error!"), wxICON_ERROR);
-			continue;
-		}
+			wxString modName = e.Mod.ModName.size() ? e.Mod.ModName : (e.File + ".gpk");
+			progress.SetActionText(wxT("Removing mod: ") + e.File + ".gpk");
+			if (e.Enabled && !TurnOffMod(e.Mod))
+			{
+				wxMessageBox(_("Failed to disable mod: ") + e.File + ".gpk", _("Error!"), wxICON_ERROR);
+				continue;
+			}
 
-		for (auto const& tfc : e.Mod.TfcPackages)
-		{
-			std::filesystem::remove(GetApp()->GetModsDir() / TfcName(tfc.Idx, true).ToStdWstring(), err);
-		}
+			std::error_code err;
+			if (std::filesystem::exists(GetApp()->GetModsDir() / (e.File + ".gpk")) && !std::filesystem::remove(GetApp()->GetModsDir() / (e.File + ".gpk"), err))
+			{
+				wxMessageBox(_("Failed to delete the ") + e.File + ".gpk!", _("Error!"), wxICON_ERROR);
+				continue;
+			}
 
-		ModList.erase(std::remove(ModList.begin(), ModList.end(), e), ModList.end());
-	}
+			for (auto const& tfc : e.Mod.TfcPackages)
+			{
+				std::filesystem::remove(GetApp()->GetModsDir() / TfcName(tfc.Idx, true).ToStdWstring(), err);
+			}
+
+			ModList.erase(std::remove(ModList.begin(), ModList.end(), e), ModList.end());
+		}
+		progress.Close(wxID_OK);
+	}).detach();
 	
+	progress.ShowModal();
+
 	GetApp()->UpdateModsList(ModList);
 	wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
 }
@@ -296,18 +327,27 @@ void ModWindow::OnTurnOnClicked(wxCommandEvent& event)
 		items.push_back(&ModList[int(item.GetID()) - 1]);
 	}
 	std::vector<bool> tmp;
-	for (ModEntry* e : items)
-	{
-		tmp.push_back(e->Enabled);
-		if (!e->Enabled)
+
+	ProgressWindow progress(this);
+	progress.SetProgress(ProgressWindow::PW_IndeterminateProgress);
+	std::thread([&] {
+		for (ModEntry* e : items)
 		{
-			e->Enabled = true;
-			if (!TurnOnMod(e->Mod))
+			tmp.push_back(e->Enabled);
+			if (!e->Enabled)
 			{
-				e->Enabled = false;
+				e->Enabled = true;
+				progress.SetActionText(wxT("Enabling: ") + e->File);
+				if (!TurnOnMod(e->Mod))
+				{
+					e->Enabled = false;
+				}
 			}
 		}
-	}
+		progress.Close(wxID_OK);
+	}).detach();
+	
+	progress.ShowModal();
 
 	try
 	{
@@ -337,44 +377,57 @@ void ModWindow::OnTurnOffClicked(wxCommandEvent& event)
 	{
 		return;
 	}
-	std::vector<ModEntry*> items;
-	for (auto& item : selection)
-	{
-		items.push_back(&ModList[int(item.GetID()) - 1]);
-	}
-	std::vector<bool> tmp;
-	for (ModEntry* e : items)
-	{
-		tmp.push_back(e->Enabled);
-		if (e->Enabled)
-		{
-			e->Enabled = false;
-			if (!TurnOffMod(e->Mod))
-			{
-				e->Enabled = true;
-			}
-		}
-	}
 
-	try
-	{
-		CompositeMap.Save();
-	}
-	catch (...)
-	{
-		wxMessageBox(_("Failed to save the CompositePackageMapper.dat!"), _("Error!"), wxICON_ERROR);
-		CompositeMap.Reload();
-		int idx = 0;
+	ProgressWindow progress(this);
+	progress.SetProgress(ProgressWindow::PW_IndeterminateProgress);
+
+	std::thread([&] {
+		std::vector<ModEntry*> items;
+		for (auto& item : selection)
+		{
+			items.push_back(&ModList[int(item.GetID()) - 1]);
+		}
+		std::vector<bool> tmp;
 		for (ModEntry* e : items)
 		{
-			e->Enabled = tmp[idx];
-			idx++;
+			tmp.push_back(e->Enabled);
+			if (e->Enabled)
+			{
+				progress.SetActionText(wxT("Disabling: ") + e->File);
+				e->Enabled = false;
+				if (!TurnOffMod(e->Mod))
+				{
+					e->Enabled = true;
+				}
+			}
 		}
-		return;
-	}
 
-	GetApp()->UpdateModsList(ModList);
-	wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
+		try
+		{
+			CompositeMap.Save();
+		}
+		catch (...)
+		{
+			wxMessageBox(_("Failed to save the CompositePackageMapper.dat!"), _("Error!"), wxICON_ERROR);
+			CompositeMap.Reload();
+			int idx = 0;
+			for (ModEntry* e : items)
+			{
+				e->Enabled = tmp[idx];
+				idx++;
+			}
+			progress.Close(wxID_CANCEL);
+			return;
+		}
+		progress.Close(wxID_OK);
+	}).detach();
+
+	
+	if (progress.ShowModal() == wxID_OK)
+	{
+		GetApp()->UpdateModsList(ModList);
+		wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
+	}
 }
 
 void ModWindow::OnChangeDirClicked(wxCommandEvent& event)
@@ -444,105 +497,118 @@ void ModWindow::OnMoreModsClicked(wxCommandEvent& event)
 void ModWindow::OnIdle(wxIdleEvent& event)
 {
 	Disconnect(wxEVT_IDLE, wxIdleEventHandler(ModWindow::OnIdle), NULL, this);
-
-	std::vector<ModEntry> missing;
-	for (ModEntry& entry : ModList)
-	{
-		std::filesystem::path path(GetApp()->GetModsDir() / entry.File);
-		path.replace_extension(".gpk");
-		if (!std::filesystem::exists(path))
-		{
-			missing.push_back(entry);
-		}
-		std::ifstream s(path, std::ios::binary | std::ios::in);
-		s >> entry.Mod;
-		if (entry.Mod.Container.empty())
-		{
-			entry.Mod.ModName = path.filename().string();
-			entry.Mod.ModAuthor = "-";
-			entry.Mod.Container = path.filename().string();
-		}
-	}
-
 	bool teraUpdated = false;
-	try
-	{
-		CompositeMap = CompositeMapperFile(GetApp()->GetCompositeMapperPath().wstring());
-		if (!CompositeMap.IsMarked())
-		{
-			GetApp()->BackupCompositeMapperFile();
-			CompositeMap.Mark();
-			CompositeMap.Save();
-			teraUpdated = true;
-		}
-		if (!std::filesystem::exists(GetApp()->GetBackupCompositeMapperPath()))
-		{
-			if (teraUpdated)
-			{
-				wxMessageBox(_("Failed to create ") + GetApp()->GetBackupCompositeMapperPath().filename().wstring() + _(" file!"), _("Error!"), wxICON_ERROR);
-			}
-			else
-			{
-				wxString msg = _("File ") + GetApp()->GetBackupCompositeMapperPath().filename().wstring();
-				msg += _(" is missing!\nIf you have delete it, please restore it and restart the TMM");
-				msg += _(", otherwise delete the CompositePackageMapper.dat and repair your client!");
-				wxMessageBox( msg, _("Error!"), wxICON_ERROR);
-			}
-			GetApp()->ExitMainLoop();
-			return;
-		}
-		BackupMap = CompositeMapperFile(GetApp()->GetBackupCompositeMapperPath().wstring());
-	}
-	catch (...)
-	{
-		wxMessageBox(_("Failed to load the CompositePackageMapper.dat"), _("Error!"), wxICON_ERROR);
-		GetApp()->ChangeRootDir({});
-		Close();
-	}
-
 	bool saveList = false;
-	if (teraUpdated)
-	{
+
+	ProgressWindow progress(this);
+	progress.SetActionText(wxT("Loading..."));
+	progress.SetProgress(-1);
+
+	std::thread([&]{
+		std::vector<ModEntry> missing;
 		for (ModEntry& entry : ModList)
 		{
+			std::filesystem::path path(GetApp()->GetModsDir() / entry.File);
+			path.replace_extension(".gpk");
+			if (!std::filesystem::exists(path))
+			{
+				missing.push_back(entry);
+			}
+			std::ifstream s(path, std::ios::binary | std::ios::in);
+			s >> entry.Mod;
+			if (entry.Mod.Container.empty())
+			{
+				entry.Mod.ModName = path.filename().string();
+				entry.Mod.ModAuthor = "-";
+				entry.Mod.Container = path.filename().string();
+			}
+		}
+
+
+		try
+		{
+			CompositeMap = CompositeMapperFile(GetApp()->GetCompositeMapperPath().wstring());
+			if (!CompositeMap.IsMarked())
+			{
+				GetApp()->BackupCompositeMapperFile();
+				CompositeMap.Mark();
+				CompositeMap.Save();
+				teraUpdated = true;
+			}
+			if (!std::filesystem::exists(GetApp()->GetBackupCompositeMapperPath()))
+			{
+				if (teraUpdated)
+				{
+					wxMessageBox(_("Failed to create ") + GetApp()->GetBackupCompositeMapperPath().filename().wstring() + _(" file!"), _("Error!"), wxICON_ERROR);
+				}
+				else
+				{
+					wxString msg = _("File ") + GetApp()->GetBackupCompositeMapperPath().filename().wstring();
+					msg += _(" is missing!\nIf you have delete it, please restore it and restart the TMM");
+					msg += _(", otherwise delete the CompositePackageMapper.dat and repair your client!");
+					wxMessageBox(msg, _("Error!"), wxICON_ERROR);
+				}
+				GetApp()->ExitMainLoop();
+				return;
+			}
+			BackupMap = CompositeMapperFile(GetApp()->GetBackupCompositeMapperPath().wstring());
+		}
+		catch (...)
+		{
+			wxMessageBox(_("Failed to load the CompositePackageMapper.dat"), _("Error!"), wxICON_ERROR);
+			GetApp()->ChangeRootDir({});
+			Close();
+		}
+
+		
+		if (teraUpdated)
+		{
+			for (ModEntry& entry : ModList)
+			{
+				if (!entry.Enabled)
+				{
+					continue;
+				}
+
+				// Find first turned on mod and ask user. On NO turn off all mods.
+				if (wxMessageBox(_("Do you want to enable mods you used with the previous version?"), _("Your game was updated or repaired"), wxICON_INFORMATION | wxYES_NO) != wxYES)
+				{
+					saveList = true;
+					for (ModEntry& tentry : ModList)
+					{
+						tentry.Enabled = false;
+					}
+				}
+				break;
+			}
+		}
+
+		// Turn on all mods to make sure tmm is in sync with the map file
+		for (ModEntry& entry : ModList)
+		{
+			progress.SetActionText(wxT("Processing: ") + entry.Mod.Container);
 			if (!entry.Enabled)
 			{
+				if (!teraUpdated)
+				{
+					// Make sure modlist and dat file are synced
+					TurnOffMod(entry.Mod, /*silent*/true);
+				}
 				continue;
 			}
-
-			// Find first turned on mod and ask user. On NO turn off all mods.
-			if (wxMessageBox(_("Do you want to enable mods you used with the previous version?"), _("Your game was updated or repaired"), wxICON_INFORMATION | wxYES_NO) != wxYES)
+			if (!TurnOnMod(entry.Mod))
 			{
 				saveList = true;
-				for (ModEntry& tentry : ModList)
-				{
-					tentry.Enabled = false;
-				}
+				entry.Enabled = false;
 			}
-			break;
 		}
-	}
 
-	// Turn on all mods to make sure tmm is in sync with the map file
-	for (ModEntry& entry : ModList)
-	{
-		if (!entry.Enabled)
-		{
-			if (!teraUpdated)
-			{
-				// Make sure modlist and dat file are synced
-				TurnOffMod(entry.Mod, /*silent*/true);
-			}
-			continue;
-		}
-		if (!TurnOnMod(entry.Mod))
-		{
-			saveList = true;
-			entry.Enabled = false;
-		}
-	}
+		CompositeMap.Save();
+		progress.Close(wxID_OK);
 
-	CompositeMap.Save();
+	}).detach();
+	
+	progress.ShowModal();
 
 	if (saveList)
 	{
@@ -657,9 +723,6 @@ bool ModWindow::InstallMod(const std::wstring& path, bool save)
 	{
 		wxMessageBox(_("The mod is designed for a newer version of the TMM. It may not work correctly!"), _("Warning!"), wxICON_WARNING);
 	}
-
-	
-	
 
 	std::filesystem::path source(path);
 	std::filesystem::path dest = GetApp()->GetModsDir() / (mod.Container + ".gpk");
