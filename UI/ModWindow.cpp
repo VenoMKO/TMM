@@ -114,7 +114,7 @@ ModWindow::ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxW
 	m_panel2 = new wxPanel(m_panel1, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
 	bSizer3->Add(m_panel2, 1, wxEXPAND | wxALL, 5);
 
-	WaitTeraCheckbox = new wxCheckBox(m_panel1, wxID_ANY, _("Wait for Tera to start"), wxDefaultPosition, wxDefaultSize, 0);
+	WaitTeraCheckbox = new wxCheckBox(m_panel1, wxID_ANY, _("Skip launcher integrity check"), wxDefaultPosition, wxDefaultSize, 0);
 	WaitTeraCheckbox->SetValue(GetApp()->GetWaitForTera());
 	bSizer3->Add(WaitTeraCheckbox, 0, wxALL, 5);
 
@@ -140,7 +140,7 @@ ModWindow::ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxW
 
 	Centre(wxBOTH);
 
-	WaitTeraCheckbox->SetToolTip(_("Usefull for KR/TW Tera. Allows to skip launcher's integrity check."));
+	WaitTeraCheckbox->SetToolTip(_("Usefull for KR/TW Tera. Applies mods after launcher integrity check. Do not close TMM until you exit Tera."));
 
 	ModListView->AppendToggleColumn(_("On/Off"), ModUIModel::Col_Check, wxDATAVIEW_CELL_ACTIVATABLE, 55);
 	ModListView->AppendTextColumn(_("Name"), ModUIModel::Col_Name, wxDATAVIEW_CELL_INERT, 270, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
@@ -183,19 +183,13 @@ bool ModWindow::OnModStateChange(ModEntry& mod)
 	{
 		try
 		{
-			if (WaitTeraCheckbox->GetValue())
-			{
-				CompositeMap.Cache();
-			}
-			else
-			{
-				CompositeMap.Save();
-			}
+			CommitChanges();
 		}
 		catch (...)
 		{
 			wxMessageBox(_("Failed to save the CompositePackageMapper.dat!"), _("Error!"), wxICON_ERROR);
 			CompositeMap.Reload();
+			CompositeMap.Mark();
 			mod.Enabled = !mod.Enabled;
 			return false;
 		}
@@ -204,6 +198,7 @@ bool ModWindow::OnModStateChange(ModEntry& mod)
 	else
 	{
 		CompositeMap.Reload();
+		CompositeMap.Mark();
 		mod.Enabled = !mod.Enabled;
 		wxQueueEvent(this, new wxCommandEvent(RELOAD_MOD_LIST));
 		return false;
@@ -249,14 +244,7 @@ void ModWindow::OnAddClicked(wxCommandEvent& event)
 
 	if (needsSave)
 	{
-		if (WaitTeraCheckbox->GetValue())
-		{
-			CompositeMap.Cache();
-		}
-		else
-		{
-			CompositeMap.Save();
-		}
+		CommitChanges();
 	}
 
 	GetApp()->UpdateModsList(ModList);
@@ -368,19 +356,13 @@ void ModWindow::OnTurnOnClicked(wxCommandEvent& event)
 
 	try
 	{
-		if (WaitTeraCheckbox->GetValue())
-		{
-			CompositeMap.Cache();
-		}
-		else
-		{
-			CompositeMap.Save();
-		}
+		CommitChanges();
 	}
 	catch (...)
 	{
 		wxMessageBox(_("Failed to save the CompositePackageMapper.dat!"), _("Error!"), wxICON_ERROR);
 		CompositeMap.Reload();
+		CompositeMap.Mark();
 		int idx = 0;
 		for (ModEntry* e : items)
 		{
@@ -428,19 +410,13 @@ void ModWindow::OnTurnOffClicked(wxCommandEvent& event)
 
 		try
 		{
-			if (WaitTeraCheckbox->GetValue())
-			{
-				CompositeMap.Cache();
-			}
-			else
-			{
-				CompositeMap.Save();
-			}
+			CommitChanges();
 		}
 		catch (...)
 		{
 			wxMessageBox(_("Failed to save the CompositePackageMapper.dat!"), _("Error!"), wxICON_ERROR);
 			CompositeMap.Reload();
+			CompositeMap.Mark();
 			int idx = 0;
 			for (ModEntry* e : items)
 			{
@@ -568,9 +544,9 @@ void ModWindow::OnIdle(wxIdleEvent& event)
 			if (!CompositeMap.IsMarked())
 			{
 				GetApp()->BackupCompositeMapperFile();
+				CompositeMap.Mark();
 				if (!WaitTeraCheckbox->GetValue())
 				{
-					CompositeMap.Mark();
 					CompositeMap.Save();
 					teraUpdated = true;
 				}				
@@ -642,14 +618,7 @@ void ModWindow::OnIdle(wxIdleEvent& event)
 				entry.Enabled = false;
 			}
 		}
-		if (WaitTeraCheckbox->GetValue())
-		{
-			CompositeMap.Cache();
-		}
-		else
-		{
-			CompositeMap.Save();
-		}
+		CommitChanges();
 		progress.Close(Codes::OK);
 
 	}).detach();
@@ -727,7 +696,7 @@ void ModWindow::OnWaitForTeraChanged(wxCommandEvent&)
 void ModWindow::StartWaiting(bool value)
 {
 	bool err = false;
-	TeraRunning = IsTeraRunning(err);
+	TeraRunning = IsTeraRunning(err, GetApp()->GetClientDir());
 	if (value)
 	{
 		TeraTimer.Start(500);
@@ -741,7 +710,7 @@ void ModWindow::StartWaiting(bool value)
 void ModWindow::CheckTera(wxTimerEvent&)
 {
 	bool err = false;
-	bool teraRunning = IsTeraRunning(err);
+	bool teraRunning = IsTeraRunning(err, GetApp()->GetClientDir());
 	
 	if (err)
 	{
@@ -945,14 +914,7 @@ bool ModWindow::InstallMod(const std::wstring& path, bool save)
 		newMod.Enabled = true;
 		if (save)
 		{
-			if (WaitTeraCheckbox->GetValue())
-			{
-				CompositeMap.Cache();
-			}
-			else
-			{
-				CompositeMap.Save();
-			}
+			CommitChanges();
 		}
 	}
 
@@ -1139,6 +1101,19 @@ int ModWindow::GetAvailableTfcIndex()
 		}
 	}
 	return 0;
+}
+
+void ModWindow::CommitChanges()
+{
+	if (WaitTeraCheckbox->GetValue())
+	{
+		CompositeMap.Mark();
+		CompositeMap.Cache();
+	}
+	else
+	{
+		CompositeMap.Save();
+	}
 }
 
 void ModWindow::OnTeraLaunched()

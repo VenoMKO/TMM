@@ -165,6 +165,7 @@ bool TMM::SetupPaths()
     CompositeMapperPath = RootDir / CookedPcDir / CompositeMapperFile;
   }
 
+  ClientDir = RootDir.parent_path();
   ModsDir = RootDir / ModsStorageDir;
   BackupCompositeMapperPath = ModsDir / CompositeMapperBackupFile;
   GameConfigPath = ModsDir / GameConfigFilePath;

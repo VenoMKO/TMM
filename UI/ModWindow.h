@@ -35,6 +35,8 @@ protected:
 	bool TurnOffMod(const ModFile& mod, bool silent = false);
 	int GetAvailableTfcIndex();
 
+	void CommitChanges();
+
 	void StartWaiting(bool value);
 	void CheckTera(wxTimerEvent&);
 	void OnTeraLaunched();

@@ -27,6 +27,11 @@ public:
     return RootDir;
   }
 
+  inline std::filesystem::path GetClientDir() const
+  {
+    return ClientDir;
+  }
+
   inline std::filesystem::path GetModsDir() const
   {
     return ModsDir;
@@ -65,6 +70,7 @@ protected:
 
 private:
   std::filesystem::path RootDir; // S1Game
+  std::filesystem::path ClientDir; // S1Game/..
   std::filesystem::path ModsDir; // S1Game/CookedPC
   std::filesystem::path CompositeMapperPath; // S1Game/CookedPC/CompositePackageMapper.dat
   std::filesystem::path BackupCompositeMapperPath; // S1Game/CookedPC/CompositePackageMapper.clean

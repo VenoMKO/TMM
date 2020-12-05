@@ -38,7 +38,7 @@ bool IncompletePathsEqual(const std::string& a, const std::string& b)
   return compositeA == compositeB && objPathA == objPathB;
 }
 
-bool IsTeraRunning(bool& error)
+bool IsTeraRunning(bool& error, const std::wstring& teraDir)
 {
   DWORD processes[2048];
   DWORD arraySize = 0;
@@ -64,10 +64,23 @@ bool IsTeraRunning(bool& error)
           anySuccess = true;
           if (!_tcscmp(processName, _T("TERA.exe")))
           {
-            return true;
+            if (teraDir.empty())
+            {
+              CloseHandle(hProcess);
+              return true;
+            }
+            else if (GetModuleFileNameEx(hProcess, NULL, processName, MAX_PATH) > teraDir.size())
+            {
+              if (!_tcsncmp(processName, teraDir.c_str(), teraDir.size()))
+              {
+                CloseHandle(hProcess);
+                return true;
+              }
+            }
           }
         }
       }
+      CloseHandle(hProcess);
     }
   }
   if (!anySuccess)
