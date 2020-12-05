@@ -13,7 +13,7 @@ wxDECLARE_EVENT(RELOAD_MOD_LIST, wxCommandEvent);
 class ModWindow : public wxFrame, public ModListDelegate
 {
 public:
-	ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxWindowID id = wxID_ANY, const wxString& title = _("Tera Mod Manager"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize(821, 434), long style = wxCAPTION | wxCLOSE_BOX | wxSYSTEM_MENU | wxTAB_TRAVERSAL);
+	ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxWindowID id = wxID_ANY, const wxString& title = _("Tera Mod Manager"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize(821, 434), long style = wxCAPTION | wxCLOSE_BOX | wxMINIMIZE_BOX | wxSYSTEM_MENU | wxTAB_TRAVERSAL);
 
 	bool OnModStateChange(ModEntry& mod) override;
 
@@ -35,6 +35,8 @@ protected:
 	bool TurnOffMod(const ModFile& mod, bool silent = false);
 	int GetAvailableTfcIndex();
 
+	void UpdateUI();
+
 	void CommitChanges();
 
 	void StartWaiting(bool value);
@@ -52,6 +54,7 @@ private:
 	wxButton* RestoreButton = nullptr;
 	wxButton* MoreModsButton = nullptr;
 	wxHyperlinkCtrl* GitHubLink = nullptr;
+	wxStaticText* ModsAppliedTextField = nullptr;
 	wxCheckBox* WaitTeraCheckbox = nullptr;
 
 	bool TeraRunning = false;

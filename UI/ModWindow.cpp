@@ -114,9 +114,16 @@ ModWindow::ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxW
 	m_panel2 = new wxPanel(m_panel1, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
 	bSizer3->Add(m_panel2, 1, wxEXPAND | wxALL, 5);
 
+	ModsAppliedTextField = new wxStaticText(m_panel1, wxID_ANY, _("Tera is running. Mods applied!"), wxDefaultPosition, wxDefaultSize, 0);
+	ModsAppliedTextField->Wrap(-1);
+	ModsAppliedTextField->SetFont(wxFont(wxNORMAL_FONT->GetPointSize(), wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, wxEmptyString));
+	ModsAppliedTextField->SetForegroundColour(wxColour(0, 170, 0));
+
+	bSizer3->Add(ModsAppliedTextField, 0, wxALL | wxALIGN_CENTER_HORIZONTAL, 5);
+
 	WaitTeraCheckbox = new wxCheckBox(m_panel1, wxID_ANY, _("Skip launcher integrity check"), wxDefaultPosition, wxDefaultSize, 0);
 	WaitTeraCheckbox->SetValue(GetApp()->GetWaitForTera());
-	bSizer3->Add(WaitTeraCheckbox, 0, wxALL, 5);
+	bSizer3->Add(WaitTeraCheckbox, 0, wxALL | wxALIGN_CENTER_HORIZONTAL, 5);
 
 
 	m_panel1->SetSizer(bSizer3);
@@ -141,6 +148,7 @@ ModWindow::ModWindow(wxWindow* parent, const std::vector<ModEntry>& entries, wxW
 	Centre(wxBOTH);
 
 	WaitTeraCheckbox->SetToolTip(_("Usefull for KR/TW Tera. Applies mods after launcher integrity check. Do not close TMM until you exit Tera."));
+	ModsAppliedTextField->Show(false);
 
 	ModListView->AppendToggleColumn(_("On/Off"), ModUIModel::Col_Check, wxDATAVIEW_CELL_ACTIVATABLE, 55);
 	ModListView->AppendTextColumn(_("Name"), ModUIModel::Col_Name, wxDATAVIEW_CELL_INERT, 270, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
@@ -649,35 +657,12 @@ void ModWindow::OnIdle(wxIdleEvent& event)
 void ModWindow::OnRealoadModList(wxCommandEvent&)
 {
 	ModListView->AssociateModel(new ModUIModel(ModList, this));
-	OffButton->Enable(ModListView->HasSelection());
-	OnButton->Enable(ModListView->HasSelection());
-	RemoveButton->Enable(ModListView->HasSelection());
-	for (const auto& mod : ModList)
-	{
-		if (mod.Enabled)
-		{
-			OffButton->Enable(true);
-			if (OffButton->IsEnabled() && OnButton->IsEnabled())
-			{
-				break;
-			}
-		}
-		else
-		{
-			OnButton->Enable(true);
-			if (OffButton->IsEnabled() && OnButton->IsEnabled())
-			{
-				break;
-			}
-		}
-	}
+	UpdateUI();
 }
 
 void ModWindow::OnModSelectionChanged(wxDataViewEvent& event)
 {
-	OnButton->Enable(ModListView->HasSelection());
-	OffButton->Enable(ModListView->HasSelection());
-	RemoveButton->Enable(ModListView->HasSelection());
+	UpdateUI();
 }
 
 void ModWindow::OnWaitForTeraChanged(wxCommandEvent&)
@@ -1120,6 +1105,7 @@ void ModWindow::OnTeraLaunched()
 {
 	CompositeMap.Save();
 	RestoreMap = true;
+	UpdateUI();
 }
 
 void ModWindow::OnTeraClosed()
@@ -1129,6 +1115,20 @@ void ModWindow::OnTeraClosed()
 		RestoreMap = false;
 		BackupMap.Save(GetApp()->GetCompositeMapperPath());
 	}
+	UpdateUI();
+}
+
+void ModWindow::UpdateUI()
+{
+	AddButton->Enable(!RestoreMap);
+	ChangeDirButton->Enable(!RestoreMap);
+	RestoreButton->Enable(!RestoreMap);
+	WaitTeraCheckbox->Enable(!RestoreMap);
+	OffButton->Enable(ModListView->HasSelection() && !RestoreMap);
+	OnButton->Enable(ModListView->HasSelection() && !RestoreMap);
+	RemoveButton->Enable(ModListView->HasSelection() && !RestoreMap);
+	ModListView->Enable(!RestoreMap);
+	ModsAppliedTextField->Show(RestoreMap);
 }
 
 wxBEGIN_EVENT_TABLE(ModWindow, wxFrame)
