@@ -11,6 +11,9 @@
 #include <filesystem>
 #include <thread>
 
+const int DefaultPollInterval = 2000;
+const int ActivePollInterval = 750;
+
 const char* MoreModsLink = "https://www.tumblr.com/tagged/tera+mods";
 const char* UpdateLink = "https://github.com/VenoMKO/TMM/releases";
 
@@ -682,9 +685,17 @@ void ModWindow::StartWaiting(bool value)
 {
 	bool err = false;
 	TeraRunning = IsTeraRunning(err, GetApp()->GetClientDir());
+	if (err)
+	{
+		wxMessageBox(_("Failed to check if TERA.exe is running!"), _("Error!"), wxICON_ERROR);
+		WaitTeraCheckbox->SetValue(false);
+		wxCommandEvent e;
+		OnWaitForTeraChanged(e);
+		return;
+	}
 	if (value)
 	{
-		TeraTimer.Start(500);
+		TeraTimer.Start(ActivePollInterval);
 	}
 	else
 	{
@@ -709,10 +720,14 @@ void ModWindow::CheckTera(wxTimerEvent&)
 		if (teraRunning)
 		{
 			OnTeraLaunched();
+			TeraTimer.Stop();
+			TeraTimer.Start(DefaultPollInterval);
 		}
 		else
 		{
 			OnTeraClosed();
+			TeraTimer.Stop();
+			TeraTimer.Start(ActivePollInterval);
 		}
 	}
 
@@ -1050,6 +1065,7 @@ bool ModWindow::TurnOnMod(const ModFile& mod)
 		entry.Size = package.Size;
 		CompositeMap.AddEntry(entry);
 	}
+	return true;
 }
 
 bool ModWindow::TurnOffMod(const ModFile& mod, bool silent)
@@ -1103,7 +1119,15 @@ void ModWindow::CommitChanges()
 
 void ModWindow::OnTeraLaunched()
 {
-	CompositeMap.Save();
+	try
+	{
+		CompositeMap.Save();
+	}
+	catch (...)
+	{
+		wxMessageBox(_("Failed to save modded CompositePackageMapper.dat file."), _("Error!"), wxICON_ERROR);
+		return;
+	}
 	RestoreMap = true;
 	UpdateUI();
 }
