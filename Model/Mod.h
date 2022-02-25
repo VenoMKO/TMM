@@ -3,8 +3,6 @@
 #include <fstream>
 #include <vector>
 
-#define VER_TERA_FILEMOD 2
-
 std::string GetString(std::ifstream& s);
 
 // Struct represents a composite GPK file
